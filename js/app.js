@@ -1108,7 +1108,7 @@ walkRouteBtn?.addEventListener('click', () => {
     alert('Choose a destination first by searching or tapping the map.');
     return;
   }
-  window.location.href = 'pages/guide.html';
+  window.location.href = 'guide.html';
 });
 
 destinationInput?.addEventListener('input', (e) => {

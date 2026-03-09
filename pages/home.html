@@ -22,6 +22,7 @@
         </div>
 
         <div class="topbar-actions">
+          <button class="circle-btn" id="nearbyBtn" type="button" title="Nearby users">🌍</button>
           <button class="circle-btn" id="openShareModal" type="button" title="Add trusted contact">+</button>
           <button class="circle-btn" id="menuBtn" type="button" title="Preferences">☰</button>
         </div>
@@ -169,12 +170,13 @@
       <div class="contact-detail-box" id="contactDetailBox"></div>
 
       <div class="action-grid">
-        <button class="primary-btn" id="callContactBtn" type="button">Call</button>
-        <button class="primary-btn" id="textContactBtn" type="button">Text</button>
-        <button class="primary-btn" id="emailContactBtn" type="button">Email</button>
-        <button class="secondary-btn" id="locateContactBtn" type="button">Locate</button>
-        <button class="secondary-btn" id="shareMyLocationBtn" type="button">Share My Location</button>
-        <button class="danger-btn" id="deleteContactBtn" type="button">Delete</button>
+        <button class="primary-btn" id="voiceCallBtn" type="button">📞 Voice Call</button>
+        <button class="primary-btn" id="callContactBtn" type="button">☎️ Call</button>
+        <button class="primary-btn" id="textContactBtn" type="button">💬 Text</button>
+        <button class="primary-btn" id="emailContactBtn" type="button">✉️ Email</button>
+        <button class="secondary-btn" id="locateContactBtn" type="button">📍 Locate</button>
+        <button class="secondary-btn" id="shareMyLocationBtn" type="button">📤 Share Location</button>
+        <button class="danger-btn" id="deleteContactBtn" type="button">🗑️ Delete</button>
       </div>
 
       <div class="action-row">
@@ -223,6 +225,19 @@
       </div>
       <div class="action-row">
         <button class="secondary-btn modal-close" data-close="#categoryModal" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nearby Users Modal -->
+  <div class="modal" id="nearbyUsersModal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-title">🌍 Nearby Users</div>
+      <div class="panel-sub" style="margin-bottom: 12px;">Users nearby using Navify (within 5km)</div>
+      <div id="nearbyUsersList" style="max-height: 300px; overflow-y: auto;"></div>
+      <div class="action-row" style="margin-top: 12px;">
+        <button class="secondary-btn" id="refreshNearbyBtn" type="button">🔄 Refresh</button>
+        <button class="secondary-btn modal-close" data-close="#nearbyUsersModal" type="button">Close</button>
       </div>
     </div>
   </div>

@@ -82,7 +82,68 @@ window.verifyUserPhone = (userId, phoneNumber) => {
     verified: true,
     verifiedAt: Date.now()
   });
-  } catch (err) {
-    console.error('Failed to initialize Firebase for Navify:', err);
-  }
-})();
+};
+
+// Real-time location sharing
+window.shareLocationToFirebase = (uid, lat, lng, address) => {
+  if (!window.navifyDb || !uid) return;
+  return window.navifyDb.ref(`users/${uid}/location`).set({
+    lat: lat,
+    lng: lng,
+    address: address || 'Current location',
+    timestamp: firebase.database.ServerValue.TIMESTAMP,
+    isSharing: true
+  });
+};
+
+// Stop sharing location
+window.stopSharingLocation = (uid) => {
+  if (!window.navifyDb || !uid) return;
+  return window.navifyDb.ref(`users/${uid}/location`).remove();
+};
+
+// Listen to friend's location in real-time
+window.listenToFriendLocation = (friendUid, callback) => {
+  if (!window.navifyDb || !friendUid) return () => {};
+  const ref = window.navifyDb.ref(`users/${friendUid}/location`);
+  ref.on('value', (snapshot) => {
+    const location = snapshot.val();
+    if (callback) callback(location);
+  });
+  return () => ref.off();
+};
+
+// Get nearby users within specified radius (km)
+window.getNearbyUsers = async (myLat, myLng, radiusKm = 5) => {
+  if (!window.navifyDb) return [];
+  
+  const snapshot = await window.navifyDb.ref('users').once('value');
+  const users = [];
+  
+  snapshot.forEach((child) => {
+    const userLoc = child.val()?.location;
+    if (userLoc && userLoc.lat && userLoc.lng) {
+      const distance = haversineKm({ lat: myLat, lng: myLng }, { lat: userLoc.lat, lng: userLoc.lng });
+      if (distance <= radiusKm && distance > 0) {
+        users.push({
+          uid: child.key,
+          name: child.val()?.name || 'Unknown User',
+          phone: child.val()?.phone?.number || 'N/A',
+          lat: userLoc.lat,
+          lng: userLoc.lng,
+          address: userLoc.address,
+          distance: distance.toFixed(2)
+        });
+      }
+    }
+  });
+  
+  return users.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
+};
+
+// Get friend profile data
+window.getFriendProfile = async (friendUid) => {
+  if (!window.navifyDb || !friendUid) return null;
+  const snapshot = await window.navifyDb.ref(`users/${friendUid}`).once('value');
+  return snapshot.val();
+};

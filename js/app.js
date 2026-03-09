@@ -74,6 +74,12 @@ let lastReadableLocation = '';
 let lastReverseLookupAt = 0;
 let lastRouteRefreshAt = 0;
 
+// Friend location tracking
+let friendMarkers = {};
+let friendListeners = {};
+let nearbyUsers = [];
+let voiceCallActive = null;
+
 const avatarOptions = [
   'assets/1.png',
   'assets/2.png',
@@ -631,6 +637,9 @@ function updateSuggestions() {
 function updateUserLocation(lat, lng) {
   if (!map) return;
 
+  // Store coordinates for nearby user detection
+  lastUserCoords = { lat, lng };
+
   if (!userMarker) {
     userMarker = L.marker([lat, lng]).addTo(map);
     userMarker.bindPopup('You are here');
@@ -656,6 +665,12 @@ function updateUserLocation(lat, lng) {
       mapUrl: `https://www.google.com/maps?q=${lat},${lng}`
     };
     setLiveData(live);
+    
+    // Share to Firebase in real-time
+    if (window.currentUser && lastReadableLocation) {
+      window.shareLocationToFirebase(window.currentUser.uid, lat, lng, lastReadableLocation);
+    }
+    
     renderContacts();
   }
 }
@@ -966,6 +981,163 @@ function syncDemoContactLocations() {
   setLiveData(live);
 }
 
+// Real-time friend location tracking
+function initFriendTracking() {
+  if (!window.currentUser || !window.navifyDb) return;
+  
+  const contacts = getContacts();
+  contacts.forEach(contact => {
+    if (contact.id && !friendListeners[contact.id]) {
+      friendListeners[contact.id] = window.listenToFriendLocation(contact.id, (location) => {
+        if (location && map) {
+          updateFriendMarkerOnMap(contact.id, contact.name, location.lat, location.lng, location.address);
+        }
+      });
+    }
+  });
+}
+
+function stopFriendTracking() {
+  Object.keys(friendListeners).forEach(contactId => {
+    if (friendListeners[contactId]) {
+      friendListeners[contactId]();
+      delete friendListeners[contactId];
+    }
+  });
+  
+  // Remove all friend markers from map
+  Object.keys(friendMarkers).forEach(contactId => {
+    if (friendMarkers[contactId]) {
+      map.removeLayer(friendMarkers[contactId]);
+      delete friendMarkers[contactId];
+    }
+  });
+}
+
+function updateFriendMarkerOnMap(contactId, contactName, lat, lng, address) {
+  if (!map || !lat || !lng) return;
+  
+  if (friendMarkers[contactId]) {
+    friendMarkers[contactId].setLatLng([lat, lng]);
+    friendMarkers[contactId].setPopupContent(`
+      <div style="text-align: center; font-size: 12px; color: #fff;">
+        <strong>${contactName}</strong><br>
+        ${address || 'Current location'}<br>
+        <button style="margin-top: 4px; padding: 4px 12px; background: #7bf1ff; border: none; border-radius: 4px; cursor: pointer;" onclick="centerMapOnCoords(${lat}, ${lng})">View</button>
+      </div>
+    `);
+  } else {
+    const marker = L.marker([lat, lng], {
+      icon: L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-cyan.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+      })
+    }).addTo(map);
+    
+    marker.bindPopup(`
+      <div style="text-align: center; font-size: 12px; color: #333;">
+        <strong>${contactName}</strong><br>
+        ${address || 'Current location'}<br>
+        <button style="margin-top: 4px; padding: 4px 12px; background: #7bf1ff; border: none; border-radius: 4px; cursor: pointer;" onclick="centerMapOnCoords(${lat}, ${lng})">View</button>
+      </div>
+    `);
+    
+    friendMarkers[contactId] = marker;
+  }
+}
+
+function centerMapOnCoords(lat, lng) {
+  if (map) {
+    map.setView([lat, lng], 16, { animate: true });
+  }
+}
+
+// Detect nearby users
+async function detectNearbyUsers() {
+  if (!window.currentUser || !lastUserCoords || !window.getNearbyUsers) return;
+  
+  try {
+    nearbyUsers = await window.getNearbyUsers(lastUserCoords.lat, lastUserCoords.lng, 5);
+    renderNearbyUsersList();
+  } catch (err) {
+    console.error('Error detecting nearby users:', err);
+  }
+}
+
+function renderNearbyUsersList() {
+  const container = document.getElementById('nearbyUsersList');
+  if (!container) return;
+  
+  if (nearbyUsers.length === 0) {
+    container.innerHTML = '<div class="panel-sub" style="padding: 16px; text-align: center;">No nearby users found. Check back later!</div>';
+    return;
+  }
+  
+  container.innerHTML = nearbyUsers.map(user => `
+    <div class="contact-item" style="padding: 12px; margin: 8px 0; background: rgba(123, 241, 255, 0.1); border-radius: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <div class="contact-name">${user.name}</div>
+          <div class="contact-meta">${user.distance} km away</div>
+          <div class="contact-meta">${user.address || 'Current location'}</div>
+        </div>
+        <button class="primary-btn" onclick="addNearbyUserToCircle('${user.uid}', '${user.name}', '${user.phone}')" style="padding: 6px 12px; font-size: 12px;">+ Add</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addNearbyUserToCircle(uid, name, phone) {
+  const contacts = getContacts();
+  const exists = contacts.some(c => c.phone === phone);
+  
+  if (exists) {
+    alert(`${name} is already in your circle!`);
+    return;
+  }
+  
+  const contact = {
+    id: uid,
+    name: name,
+    phone: phone,
+    email: '',
+    createdAt: Date.now()
+  };
+  
+  contacts.push(contact);
+  setContacts(contacts);
+  
+  // Save to Firebase
+  if (window.currentUser && window.navifyDb) {
+    window.navifyDb.ref(`users/${window.currentUser.uid}/contacts/${contact.id}`).set(contact);
+  }
+  
+  initFriendTracking();
+  renderContacts();
+  setStatus(`${name} added to your trusted circle!`);
+  closeModal(document.getElementById('nearbyUsersModal'));
+}
+
+// Voice calling
+function initiateVoiceCall(contact) {
+  if (!contact.phone) {
+    alert('Contact has no phone number');
+    return;
+  }
+  
+  voiceCallActive = contact.id;
+  
+  // Option 1: Use native phone call
+  const confirmed = confirm(`Call ${contact.name} at ${contact.phone}?`);
+  if (confirmed) {
+    window.location.href = `tel:${sanitizePhone(contact.phone)}`;
+  }
+}
+
 function renderFavorites() {
   transportList.innerHTML = '';
   favoritePlaces.forEach((place) => {
@@ -1093,8 +1265,18 @@ shareToggle?.addEventListener('click', () => {
 
   if (sharingOn) {
     requestLocation();
-    setStatus('Live sharing enabled.');
+    // Share location to Firebase in real-time
+    if (window.currentUser && lastUserCoords && lastReadableLocation) {
+      window.shareLocationToFirebase(window.currentUser.uid, lastUserCoords.lat, lastUserCoords.lng, lastReadableLocation);
+    }
+    initFriendTracking();
+    setStatus('Live sharing enabled. Friends can see your location.');
   } else {
+    // Stop sharing location
+    if (window.currentUser) {
+      window.stopSharingLocation(window.currentUser.uid);
+    }
+    stopFriendTracking();
     setStatus('Live sharing paused.');
   }
 
@@ -1109,6 +1291,27 @@ walkRouteBtn?.addEventListener('click', () => {
     return;
   }
   window.location.href = 'guide.html';
+});
+
+// Nearby users button
+document.getElementById('nearbyBtn')?.addEventListener('click', () => {
+  detectNearbyUsers();
+  openModal(document.getElementById('nearbyUsersModal'));
+});
+
+// Refresh nearby users
+document.getElementById('refreshNearbyBtn')?.addEventListener('click', () => {
+  detectNearbyUsers();
+  setStatus('Refreshing nearby users...');
+});
+
+// Voice call button
+document.getElementById('voiceCallBtn')?.addEventListener('click', () => {
+  if (!currentContactId) return;
+  const contact = getContacts().find(c => c.id === currentContactId);
+  if (contact) {
+    initiateVoiceCall(contact);
+  }
 });
 
 destinationInput?.addEventListener('input', (e) => {
@@ -1194,6 +1397,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (sharingOn) {
     shareToggle.textContent = 'Share: On';
     requestLocation();
+    // Initialize friend tracking if already sharing
+    setTimeout(() => initFriendTracking(), 1000);
   }
 
   syncDemoContactLocations();

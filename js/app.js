@@ -53,6 +53,8 @@ const userName = document.getElementById('userName');
 
 const notifBar = document.getElementById('notifBar');
 const statusText = document.getElementById('statusText');
+const loginStatus = document.getElementById('loginStatus');
+const logoutBtn = document.getElementById('logoutBtn');
 
 const CONTACT_KEY = 'navify_contacts_v2';
 const LIVE_KEY = 'navify_live_v2';
@@ -1058,7 +1060,13 @@ function centerMapOnCoords(lat, lng) {
 
 // Detect nearby users
 async function detectNearbyUsers() {
-  if (!window.currentUser || !lastUserCoords || !window.getNearbyUsers) return;
+  // Gate to registered users only (not guests)
+  if (!window.currentUser || window.currentUser.uid?.startsWith('guest')) {
+    alert('Sign up to detect nearby users and connect with travelers');
+    return;
+  }
+
+  if (!lastUserCoords || !window.getNearbyUsers) return;
   
   try {
     nearbyUsers = await window.getNearbyUsers(lastUserCoords.lat, lastUserCoords.lng, 5);
@@ -1314,6 +1322,59 @@ document.getElementById('voiceCallBtn')?.addEventListener('click', () => {
   }
 });
 
+// Update login status display based on authentication state
+function updateLoginStatus() {
+  if (window.currentUser) {
+    // User is authenticated
+    const isGuest = window.currentUser.uid?.startsWith('guest');
+    if (isGuest) {
+      loginStatus.textContent = 'Guest Mode';
+      logoutBtn.style.display = 'none';
+    } else {
+      // Show username or email
+      const displayName = window.currentUser.displayName || window.currentUser.name || window.currentUser.email || 'User';
+      loginStatus.textContent = `Signed in: ${displayName}`;
+      logoutBtn.style.display = 'inline-block';
+    }
+  } else {
+    loginStatus.textContent = 'Not signed in';
+    logoutBtn.style.display = 'none';
+  }
+}
+
+// Logout handler
+logoutBtn?.addEventListener('click', async () => {
+  const confirmed = confirm('Sign out from Navify?');
+  if (!confirmed) return;
+
+  try {
+    // Stop sharing location
+    if (window.currentUser && window.currentUser.uid) {
+      window.stopSharingLocation(window.currentUser.uid);
+    }
+
+    // Stop friend tracking
+    stopFriendTracking();
+
+    // Clear localStorage
+    localStorage.clear();
+
+    // Sign out from Firebase if available
+    if (window.firebase && window.firebase.auth) {
+      await window.firebase.auth().signOut();
+    }
+
+    // Reset current user
+    window.currentUser = null;
+
+    // Redirect to login
+    window.location.href = '../index.html';
+  } catch (err) {
+    console.error('Logout error:', err);
+    alert('Failed to sign out. Please try again.');
+  }
+});
+
 destinationInput?.addEventListener('input', (e) => {
   debouncedSearchPlaces(e.target.value);
   updateSuggestions();
@@ -1393,6 +1454,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateSuggestions();
   renderContacts();
   updateTransportModeUI();
+  updateLoginStatus();
 
   if (sharingOn) {
     shareToggle.textContent = 'Share: On';

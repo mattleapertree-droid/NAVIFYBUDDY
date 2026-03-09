@@ -122,7 +122,8 @@ window.getNearbyUsers = async (myLat, myLng, radiusKm = 5) => {
   
   snapshot.forEach((child) => {
     const userLoc = child.val()?.location;
-    if (userLoc && userLoc.lat && userLoc.lng) {
+    // Only include users who are actively sharing location (isSharing must be true)
+    if (userLoc && userLoc.lat && userLoc.lng && userLoc.isSharing === true) {
       const distance = haversineKm({ lat: myLat, lng: myLng }, { lat: userLoc.lat, lng: userLoc.lng });
       if (distance <= radiusKm && distance > 0) {
         users.push({

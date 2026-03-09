@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Navify • Walking Guide</title>
+  <link rel="stylesheet" href="../css/app.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="app-card">
+      <header class="topbar">
+        <div class="brand-wrap">
+          <div class="brand-title">NAVIFY</div>
+          <div class="brand-sub">Walking Guide</div>
+        </div>
+        <button class="circle-btn" type="button" onclick="window.history.back()" title="Go back">←</button>
+      </header>
+
+      <section class="glass-panel map-panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">Your Walking Route</div>
+            <div class="panel-sub" id="guideDescription">Follow the highlighted cyan path to your destination.</div>
+          </div>
+        </div>
+        <div id="map" class="map-live" style="height: 500px;"></div>
+        <div class="panel-sub" id="routeInfo">Loading route...</div>
+      </section>
+
+      <section class="glass-panel">
+        <div class="panel-title">Route Details</div>
+        <div id="routeDetails">
+          <p class="panel-sub" id="distanceInfo">Calculating distance...</p>
+          <p class="panel-sub" id="etaInfo">Estimating time...</p>
+        </div>
+
+        <div class="action-row">
+          <button class="primary-btn" type="button" onclick="window.location.href='home.html'">Back to Map</button>
+          <button class="secondary-btn" type="button" onclick="window.location.href='../index.html'">Exit App</button>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+  <script src="../js/theme.js"></script>
+  <script>
+    // Guide page specific logic
+    const guideMap = L.map(document.getElementById('map')).setView([14.5995, 120.9842], 13);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: ''
+    }).addTo(guideMap);
+
+    // Restore destination from localStorage
+    const DESTINATION_KEY = 'navify-guide-target';
+    const destination = JSON.parse(localStorage.getItem(DESTINATION_KEY) || 'null');
+    
+    if (destination && navigator.geolocation) {
+      document.getElementById('guideDescription').textContent = `Walking to: ${destination.label}`;
+      
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const start = [pos.coords.latitude, pos.coords.longitude];
+        const end = [destination.lat, destination.lng];
+        
+        // Center map on user
+        guideMap.setView(start, 15);
+        
+        // Add markers
+        L.marker(start).addTo(guideMap).bindPopup('You are here');
+        L.marker(end).addTo(guideMap).bindPopup(destination.label || 'Destination');
+        
+        // Calculate distance
+        const R = 6371;
+        const dLat = ((destination.lat - start[0]) * Math.PI) / 180;
+        const dLng = ((destination.lng - start[1]) * Math.PI) / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) + 
+                  Math.cos((start[0]*Math.PI)/180) * Math.cos((destination.lat*Math.PI)/180) * 
+                  Math.sin(dLng/2) * Math.sin(dLng/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distance = R * c;
+        
+        const eta = (distance / 4.8) * 60; // 4.8 km/h walking speed
+        
+        document.getElementById('distanceInfo').textContent = `Distance: ${distance.toFixed(2)} km`;
+        document.getElementById('etaInfo').textContent = `Estimated time: ${Math.round(eta)} minutes`;
+        document.getElementById('routeInfo').textContent = `Safe route distance: ${distance.toFixed(2)} km`;
+      });
+    } else {
+      document.getElementById('routeInfo').textContent = 'No destination set. Go back to home and select one.';
+    }
+  </script>
+</body>
+</html>

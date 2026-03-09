@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Navify - Your Travel Buddy</title>
+  <link rel="stylesheet" href="css/app.css" />
+  <style>
+    .auth-container {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 100;
+    }
+    
+    .auth-card {
+      width: min(500px, 100%);
+      background: linear-gradient(180deg, rgba(10, 26, 54, 0.98), rgba(6, 18, 38, 0.98));
+      border: 1px solid rgba(123, 241, 255, 0.18);
+      border-radius: 26px;
+      padding: 40px;
+      text-align: center;
+    }
+    
+    .auth-logo {
+      font-size: 56px;
+      font-weight: 900;
+      color: var(--cyan);
+      margin-bottom: 12px;
+      text-shadow: 0 0 18px rgba(123, 241, 255, 0.45);
+    }
+    
+    .auth-tagline {
+      font-size: 18px;
+      color: var(--muted);
+      margin-bottom: 36px;
+    }
+    
+    .button.guest {
+      margin-top: 12px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <main class="scene" aria-label="Navify Login">
+    <div class="glass-ring" aria-hidden="true"></div>
+    <span class="glow-line" aria-hidden="true"></span>
+    <span class="glow-line bottom" aria-hidden="true"></span>
+
+    <div class="auth-container">
+      <div class="auth-card">
+        <div class="auth-logo">NAVIFY</div>
+        <div class="auth-tagline">Your Travel Buddy</div>
+
+        <div style="margin-bottom: 20px;">
+          <p class="panel-sub">Welcome to Navify. Sign in to your account or continue as a guest.</p>
+        </div>
+
+        <div class="cta" aria-label="Authentication">
+          <button class="button" id="signInBtn">Sign In</button>
+          <button class="button secondary" id="signUpBtn">Sign Up</button>
+          <button class="button guest secondary" id="guestBtn">Continue as Guest</button>
+        </div>
+
+        <div class="toggle" style="margin-top: 24px; cursor: pointer; font-size: 14px;">White Mode</div>
+      </div>
+    </div>
+
+    <div id="authModals" aria-hidden="true">
+      <!-- Sign In Modal -->
+      <div class="modal" id="signInModal" aria-hidden="true">
+        <div class="modal-card" role="dialog" aria-label="Sign in options">
+          <div class="modal-title">Sign In</div>
+          <div class="form">
+            <input class="input" type="email" placeholder="Email" />
+            <input class="input" type="password" placeholder="Password" />
+          </div>
+          <button class="button" id="enterAppBtn">Enter App</button>
+          <button class="modal-close" data-close="#signInModal">Close</button>
+        </div>
+      </div>
+
+      <!-- Sign Up Modal -->
+      <div class="modal" id="signUpModal" aria-hidden="true">
+        <div class="modal-card" role="dialog" aria-label="Create account">
+          <div class="modal-title">Sign Up</div>
+          <div class="form">
+            <input class="input" type="text" placeholder="Username" />
+            <input class="input" type="email" placeholder="Email" />
+            <input class="input" type="password" placeholder="Password" />
+          </div>
+          <button class="button" id="createAccountBtn">Create account</button>
+          <button class="modal-close" data-close="#signUpModal">Close</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/theme.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="auth/firebase-init.js"></script>
+  <script src="auth/reset-local.js"></script>
+  <script src="auth/firebase-auth.js"></script>
+  <script src="auth/modal-core.js"></script>
+  <script src="auth/sign-in.js"></script>
+  <script src="auth/sign-up.js"></script>
+  <script>
+    // Guest access button
+    document.getElementById('guestBtn')?.addEventListener('click', () => {
+      localStorage.setItem('navify-user', JSON.stringify({
+        uid: 'guest_' + Date.now(),
+        email: null,
+        name: 'Guest',
+        photoURL: null
+      }));
+      window.location.href = 'pages/home.html';
+    });
+
+    // Auto-redirect if already logged in
+    document.addEventListener('DOMContentLoaded', () => {
+      const user = localStorage.getItem('navify-user');
+      if (user) {
+        window.location.href = 'pages/home.html';
+      }
+    });
+  </script>
+</body>
+</html>

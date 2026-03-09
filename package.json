@@ -1,0 +1,46 @@
+{
+  "name": "navify-app",
+  "version": "1.0.0",
+  "description": "Navify - Your Travel Buddy. A modern web app for safe navigation and location sharing.",
+  "main": "index.html",
+  "type": "module",
+  "scripts": {
+    "serve": "python -m http.server 8000",
+    "start": "http-server -p 8000 -c-1",
+    "dev": "live-server --port=8000",
+    "build": "echo 'No build step required for static site'",
+    "test": "echo 'No tests configured'",
+    "deploy:github": "git subtree push --prefix . origin gh-pages",
+    "deploy:vercel": "vercel",
+    "deploy:netlify": "netlify deploy"
+  },
+  "keywords": [
+    "travel",
+    "navigation",
+    "location-tracking",
+    "maps",
+    "safety",
+    "trusted-circle",
+    "gps",
+    "routing"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/navify-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/navify-app/issues"
+  },
+  "homepage": "https://navify-app.vercel.app",
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "live-server": "^1.2.2"
+  },
+  "dependencies": {
+    "firebase": "^9.22.2",
+    "leaflet": "^1.9.4",
+    "leaflet-routing-machine": "^3.2.12"
+  }
+}

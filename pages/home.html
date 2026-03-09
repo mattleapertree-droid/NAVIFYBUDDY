@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Navify • Home</title>
+
+  <link rel="stylesheet" href="../css/app.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <div class="orb orb-left"></div>
+    <div class="orb orb-right"></div>
+
+    <section class="app-card">
+      <header class="topbar">
+        <div class="brand-wrap">
+          <div class="brand-title">NAVIFY</div>
+          <div class="brand-sub">Your Travel Buddy</div>
+        </div>
+
+        <div class="topbar-actions">
+          <button class="circle-btn" id="openShareModal" type="button" title="Add trusted contact">+</button>
+          <button class="circle-btn" id="menuBtn" type="button" title="Preferences">☰</button>
+        </div>
+      </header>
+
+      <section class="hero-panel">
+        <button class="avatar-btn" id="avatarBtn" aria-label="Choose avatar">
+          <img id="avatarImg" alt="Avatar" />
+        </button>
+
+        <div class="hero-copy">
+          <h1>Hi, <span id="userName">Traveler</span></h1>
+          <p>Track yourself, set a destination, and stay connected with your trusted circle.</p>
+        </div>
+      </section>
+
+      <section class="status-strip" id="notifBar">
+        <span class="status-dot"></span>
+        <span id="statusText">Trusted Circle ready. Add contacts and turn on location sharing.</span>
+        <button class="pill-btn" id="shareToggle" type="button">Share: Off</button>
+      </section>
+
+      <section class="grid-two">
+        <div class="glass-panel">
+          <div class="panel-title">My Location</div>
+          <label class="field">
+            <span>Current place</span>
+            <input class="input" id="locationInput" placeholder="Detecting your location..." readonly />
+          </label>
+
+          <label class="field destination-wrap">
+            <span>Destination</span>
+            <input
+              class="input"
+              id="destinationInput"
+              placeholder="Search school, mall, barangay, landmark..."
+              autocomplete="off"
+            />
+            <div id="destinationSuggestions" class="destination-suggestions"></div>
+          </label>
+
+          <div class="action-row">
+            <button class="primary-btn" id="detectLocationBtn" type="button">Detect My Location</button>
+            <button class="secondary-btn" id="walkRouteBtn" type="button">Guide Me There</button>
+          </div>
+        </div>
+
+        <div class="glass-panel">
+          <div class="panel-title">Quick Actions</div>
+          <div class="quick-grid">
+            <button class="quick-card" id="transportCard" type="button">
+              <div class="quick-title">Favorite Places</div>
+              <div class="quick-sub">Fast destination shortcuts</div>
+            </button>
+            <button class="quick-card" id="categoryCard" type="button">
+              <div class="quick-title">Trip Ideas</div>
+              <div class="quick-sub">Useful places near you</div>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="glass-panel map-panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">Live Map</div>
+            <div class="panel-sub" id="mapDescription">Tap the map or search a place to set your destination.</div>
+          </div>
+          <div class="eta-badge" id="etaLabel">ETA: --</div>
+        </div>
+
+        <div id="map" class="map-live"></div>
+
+        <div class="panel-sub" id="safetyNote">Safety status: waiting for destination.</div>
+        
+        <div class="action-row" style="margin-top: 12px;">
+          <button class="secondary-btn" type="button" onclick="if(selectedDestination)savePlace(prompt('Save as:','Destination'),selectedDestination.lat,selectedDestination.lng)">
+            💾 Save This Place
+          </button>
+          <button class="secondary-btn" type="button" onclick="document.getElementById('transportModal').removeAttribute('hidden')">
+            📌 My Places
+          </button>
+        </div>
+      </section>
+
+      <section class="grid-two bottom-grid">
+        <div class="glass-panel">
+          <div class="panel-title">Suggestions Near You</div>
+          <div class="panel-sub" id="suggestionsHint">Suggestions update based on your destination.</div>
+          <div class="suggest-list" id="suggestList"></div>
+        </div>
+
+        <div class="glass-panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title">Trusted Circle</div>
+              <div class="panel-sub" id="liveStatus">Live updates are off.</div>
+            </div>
+          </div>
+          <div class="contact-list" id="contactList"></div>
+        </div>
+      </section>
+
+      <div class="footer-actions">
+        <button class="support-btn" type="button" onclick="window.location.href='support.html'">
+          Contact Support
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Add Contact Modal -->
+  <div class="modal" id="shareModal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-title">Add Trusted Contact</div>
+
+      <label class="field">
+        <span>Name</span>
+        <input class="input" id="contactNameInput" placeholder="Full name" />
+      </label>
+
+      <label class="field">
+        <span>Phone number</span>
+        <input class="input" id="contactPhoneInput" placeholder="09XXXXXXXXX or +63..." />
+      </label>
+
+      <label class="field">
+        <span>Email</span>
+        <input class="input" id="contactEmailInput" placeholder="example@email.com" />
+      </label>
+
+      <div class="action-row">
+        <button class="primary-btn" id="addContactBtn" type="button">Save Contact</button>
+        <button class="secondary-btn modal-close" data-close="#shareModal" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contact Detail Modal -->
+  <div class="modal" id="contactModal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-title" id="contactModalTitle">Contact</div>
+      <div class="panel-sub" id="contactModalSubtitle">Manage this trusted contact.</div>
+
+      <div class="contact-detail-box" id="contactDetailBox"></div>
+
+      <div class="action-grid">
+        <button class="primary-btn" id="callContactBtn" type="button">Call</button>
+        <button class="primary-btn" id="textContactBtn" type="button">Text</button>
+        <button class="primary-btn" id="emailContactBtn" type="button">Email</button>
+        <button class="secondary-btn" id="locateContactBtn" type="button">Locate</button>
+        <button class="secondary-btn" id="shareMyLocationBtn" type="button">Share My Location</button>
+        <button class="danger-btn" id="deleteContactBtn" type="button">Delete</button>
+      </div>
+
+      <div class="action-row">
+        <button class="secondary-btn modal-close" data-close="#contactModal" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Avatar Modal -->
+  <div class="modal" id="avatarModal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-title">Choose Avatar</div>
+      <div class="avatar-grid" id="avatarGrid"></div>
+
+      <label class="upload-btn">
+        Upload from device
+        <input id="avatarUpload" type="file" accept="image/*" hidden />
+      </label>
+
+      <div class="action-row">
+        <button class="secondary-btn modal-close" data-close="#avatarModal" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Favorite Places Modal -->
+  <div class="modal" id="transportModal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-title">📌 Saved Places</div>
+      <div class="panel-sub" style="margin-bottom: 12px;">Your favorite locations for quick access.</div>
+      <div class="transport-list" id="transportList"></div>
+      <div class="transport-list" id="tripPlaces"></div>
+      <div class="action-row">
+        <button class="secondary-btn modal-close" data-close="#transportModal" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trip Ideas Modal -->
+  <div class="modal" id="categoryModal" aria-hidden="true">
+    <div class="modal-card modal-wide">
+      <div class="modal-title">Trip Ideas</div>
+      <div class="trip-ideas-layout">
+        <div class="category-grid" id="categoryGrid"></div>
+        <div class="trip-places" id="tripPlaces"></div>
+      </div>
+      <div class="action-row">
+        <button class="secondary-btn modal-close" data-close="#categoryModal" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preferences Modal -->
+  <div class="modal" id="prefsModal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-title">Preferences</div>
+
+      <label class="field">
+        <span>Display name</span>
+        <input class="input" id="nameInput" placeholder="Your display name" />
+      </label>
+
+      <label class="field">
+        <span>Default Transport Mode</span>
+        <div class="action-row" style="gap: 4px; margin-top: 8px;">
+          <button class="secondary-btn" id="transportWalkBtn" type="button" onclick="setTransportMode('walk')" style="flex: 1;">🚶 Walk</button>
+          <button class="secondary-btn" id="transportCarBtn" type="button" onclick="setTransportMode('car')" style="flex: 1;">🚗 Car</button>
+          <button class="secondary-btn" id="transportTransitBtn" type="button" onclick="setTransportMode('transit')" style="flex: 1;">🚌 Transit</button>
+        </div>
+        <div class="panel-sub" style="margin-top: 8px;">Current: <strong id="currentTransportLabel">Walk</strong></div>
+      </label>
+
+      <div class="action-row">
+        <button class="primary-btn" id="savePrefsBtn" type="button">Save</button>
+        <button class="secondary-btn modal-close" data-close="#prefsModal" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+  <script src="../js/theme.js"></script>
+  <script src="../js/app.js"></script>
+</body>
+</html>

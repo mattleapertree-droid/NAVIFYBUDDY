@@ -1,0 +1,18 @@
+<div class="modal" id="signUpModal" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-label="Create account">
+    <div class="modal-title">Sign Up</div>
+    <div class="form">
+      <input class="input" id="signUpName" type="text" placeholder="Full Name" required />
+      <input class="input" id="signUpEmail" type="email" placeholder="Email Address" required />
+      <input class="input" id="signUpPhone" type="tel" placeholder="Phone Number (e.g., 09XXXXXXXXX)" required />
+      <input class="input" id="signUpPassword" type="password" placeholder="Password (min 8 characters)" required />
+      <input class="input" id="signUpConfirm" type="password" placeholder="Confirm Password" required />
+    </div>
+    <div id="signUpError" style="color: var(--danger); font-size: 12px; margin-top: 8px; display: none;"></div>
+    <div class="checks">
+      <label><input id="signUpTerms" type="checkbox" required /> I agree to Terms & Privacy</label>
+    </div>
+    <button class="button" id="createAccountBtn">Create account & Verify Phone</button>
+    <button class="modal-close" data-close="#signUpModal">Close</button>
+  </div>
+</div>

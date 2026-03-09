@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# OS files
+.DS_Store
+Thumbs.db
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build outputs
+dist/
+build/
+.env.local
+.env.*.local
+
+# Testing
+coverage/
+.nyc_output/
+
+# Development
+.cache/
+.temp/
+
+# Firebase
+.firebase/
+.firebaserc
+firebase-debug.log
+
+# Custom
+config.local.js

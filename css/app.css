@@ -290,10 +290,24 @@ body {
   color: white;
   padding: 14px 16px;
   font-size: 15px;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
 }
 
 .input::placeholder {
   color: rgba(230, 244, 255, 0.45);
+  transition: color 0.3s ease;
+}
+
+.input:focus {
+  border: 1.5px solid rgba(123, 241, 255, 0.6);
+  box-shadow: 0 0 20px rgba(123, 241, 255, 0.3), inset 0 0 10px rgba(123, 241, 255, 0.1);
+  transform: translateY(-2px);
+  background: rgba(123, 241, 255, 0.12);
+}
+
+.input:focus::placeholder {
+  color: rgba(123, 241, 255, 0.6);
 }
 
 .action-row {
@@ -471,6 +485,27 @@ body {
   z-index: 1000;
   align-items: center;
   justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) rotateX(10deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotateX(0deg);
+  }
 }
 
 .modal.show {
@@ -486,6 +521,8 @@ body {
   border-radius: 26px;
   padding: 22px;
   box-shadow: var(--shadow);
+  animation: modalSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 0.3s ease;
 }
 
 .modal-wide {

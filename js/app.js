@@ -752,6 +752,7 @@ async function searchUserByPhone() {
   const searchErrorBox = document.getElementById('addContactError');
   const searchResultBox = document.getElementById('searchResultBox');
   const phoneInput = document.getElementById('searchPhoneInput');
+  const searchPhoneBtn = document.getElementById('searchPhoneBtn');
   const phoneValue = phoneInput.value.trim();
 
   if (!phoneValue) {
@@ -763,7 +764,12 @@ async function searchUserByPhone() {
 
   try {
     searchErrorBox.style.display = 'none';
-    setStatus('🔍 Searching for user...');
+    
+    // Show loading state
+    const originalBtnText = searchPhoneBtn.textContent;
+    searchPhoneBtn.disabled = true;
+    searchPhoneBtn.textContent = '⏳ Searching...';
+    setStatus('🔍 Searching for user in the Navify network...');
     console.log('Searching for phone:', phoneValue);
 
     // Verify Firebase is ready
@@ -776,11 +782,11 @@ async function searchUserByPhone() {
     console.log('Search result:', foundUser);
 
     if (!foundUser) {
-      searchErrorBox.textContent = 'No user found with that phone number. Make sure they signed up with that number.';
+      searchErrorBox.textContent = '❌ No user found with that phone number. Make sure they signed up with Navify using that number.';
       searchErrorBox.style.display = 'block';
       searchResultBox.style.display = 'none';
       foundUserData = null;
-      setStatus('❌ User not found');
+      setStatus('No user found');
       return;
     }
 
@@ -788,20 +794,24 @@ async function searchUserByPhone() {
     foundUserData = foundUser;
     console.log('Found user:', foundUser.name, '| Phone:', foundUser.phone);
 
-    // Display the found user
+    // Display the found user with loading animation
     document.getElementById('searchResultName').textContent = foundUser.name || 'User #' + foundUser.uid.slice(-6);
     document.getElementById('searchResultPhone').textContent = '📱 ' + (foundUser.phone || 'No phone');
 
     searchErrorBox.style.display = 'none';
     searchResultBox.style.display = 'block';
-    setStatus(`✓ Found: ${foundUser.name || 'User'}!`);
+    setStatus(`✅ Found: ${foundUser.name || 'User'}! You can now add them as a friend.`);
   } catch (err) {
     console.error('Error searching user:', err);
-    searchErrorBox.textContent = 'Error: ' + (err.message || 'Could not search for user');
+    searchErrorBox.textContent = '⚠️ Error: ' + (err.message || 'Could not search for user. Please try again.');
     searchErrorBox.style.display = 'block';
     searchResultBox.style.display = 'none';
     foundUserData = null;
-    setStatus('❌ Search failed');
+    setStatus('Search failed');
+  } finally {
+    // Restore button state
+    searchPhoneBtn.disabled = false;
+    searchPhoneBtn.textContent = originalBtnText;
   }
 }
 
@@ -1267,7 +1277,7 @@ function centerMapOnCoords(lat, lng) {
   }
 }
 
-// Detect nearby users
+// Detect nearby users with loading indicator
 async function detectNearbyUsers() {
   // Gate to registered users only (not guests)
   if (!window.currentUser || window.currentUser.uid?.startsWith('guest')) {
@@ -1278,10 +1288,28 @@ async function detectNearbyUsers() {
   if (!lastUserCoords || !window.getNearbyUsers) return;
   
   try {
+    const container = document.getElementById('nearbyUsersList');
+    if (container) {
+      container.innerHTML = '<div style="text-align: center; padding: 20px;"><div style="font-size: 24px; margin-bottom: 10px;">🔍</div><div style="color: var(--muted);">Scanning nearby travelers...</div></div>';
+    }
+    
+    setStatus('🔍 Scanning for nearby users within 5km...');
     nearbyUsers = await window.getNearbyUsers(lastUserCoords.lat, lastUserCoords.lng, 5);
+    
     renderNearbyUsersList();
+    
+    if (nearbyUsers.length > 0) {
+      setStatus(`✅ Found ${nearbyUsers.length} nearby ${nearbyUsers.length === 1 ? 'user' : 'users'}!`);
+    } else {
+      setStatus('No nearby users found. Share your location to be discovered!');
+    }
   } catch (err) {
     console.error('Error detecting nearby users:', err);
+    setStatus('❌ Failed to scan for nearby users');
+    const container = document.getElementById('nearbyUsersList');
+    if (container) {
+      container.innerHTML = '<div class="panel-sub" style="padding: 16px; text-align: center; color: var(--danger);">Error scanning nearby users. Please try again.</div>';
+    }
   }
 }
 
@@ -1290,19 +1318,20 @@ function renderNearbyUsersList() {
   if (!container) return;
   
   if (nearbyUsers.length === 0) {
-    container.innerHTML = '<div class="panel-sub" style="padding: 16px; text-align: center;">No nearby users found. Check back later!</div>';
+    container.innerHTML = '<div class="panel-sub" style="padding: 16px; text-align: center;">😞 No nearby users found. Share your location and check back later!</div>';
     return;
   }
   
-  container.innerHTML = nearbyUsers.map(user => `
-    <div class="contact-item" style="padding: 12px; margin: 8px 0; background: rgba(123, 241, 255, 0.1); border-radius: 8px;">
+  container.innerHTML = '<div style="padding: 8px; color: var(--muted); font-size: 12px; text-align: center;">👥 Nearby travelers within 5km</div>' + 
+    nearbyUsers.map(user => `
+    <div class="contact-item" style="padding: 12px; margin: 8px 0; background: rgba(123, 241, 255, 0.1); border-radius: 8px; border: 1px solid rgba(123, 241, 255, 0.2);">
       <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div>
-          <div class="contact-name">${user.name}</div>
-          <div class="contact-meta">${user.distance} km away</div>
-          <div class="contact-meta">${user.address || 'Current location'}</div>
+        <div style="flex: 1;">
+          <div class="contact-name" style="margin-bottom: 4px;">${user.name}</div>
+          <div class="contact-meta">📍 ${user.distance} km away</div>
+          <div class="contact-meta" style="font-size: 11px;">📌 ${user.address || 'Current location'}</div>
         </div>
-        <button class="primary-btn" onclick="addNearbyUserToCircle('${user.uid}', '${user.name}', '${user.phone}')" style="padding: 6px 12px; font-size: 12px;">+ Add</button>
+        <button class="primary-btn" onclick="addNearbyUserToCircle('${user.uid}', '${user.name}', '${user.phone}')" style="padding: 6px 12px; font-size: 12px; white-space: nowrap;">➕ Add</button>
       </div>
     </div>
   `).join('');
@@ -1339,20 +1368,24 @@ function addNearbyUserToCircle(uid, name, phone) {
   closeModal(document.getElementById('nearbyUsersModal'));
 }
 
-// Voice calling
+// Voice calling with better UX
 function initiateVoiceCall(contact) {
   if (!contact.phone) {
-    alert('Contact has no phone number');
+    alert('❌ Contact has no phone number');
     return;
   }
   
   voiceCallActive = contact.id;
   
-  // Option 1: Use native phone call
-  const confirmed = confirm(`Call ${contact.name} at ${contact.phone}?`);
-  if (confirmed) {
-    window.location.href = `tel:${sanitizePhone(contact.phone)}`;
-  }
+  const phoneClean = sanitizePhone(contact.phone);
+  
+  // Show status
+  setStatus(`📞 Initiating call to ${contact.name}...`);
+  
+  // Slight delay to show status, then make call
+  setTimeout(() => {
+    window.location.href = `tel:${phoneClean}`;
+  }, 300);
 }
 
 function renderFavorites() {
@@ -1553,6 +1586,39 @@ function updateLoginStatus() {
 
 // Logout handler
 logoutBtn?.addEventListener('click', async () => {
+  const confirmed = confirm('Sign out from Navify?');
+  if (!confirmed) return;
+
+  try {
+    // Stop sharing location
+    if (window.currentUser && window.currentUser.uid) {
+      window.stopSharingLocation(window.currentUser.uid);
+    }
+
+    // Stop friend tracking
+    stopFriendTracking();
+
+    // Clear localStorage
+    localStorage.clear();
+
+    // Sign out from Firebase if available
+    if (window.firebase && window.firebase.auth) {
+      await window.firebase.auth().signOut();
+    }
+
+    // Reset current user
+    window.currentUser = null;
+
+    // Redirect to login
+    window.location.href = '../index.html';
+  } catch (err) {
+    console.error('Logout error:', err);
+    alert('Failed to sign out. Please try again.');
+  }
+});
+
+// Preferences logout button
+document.getElementById('prefsLogoutBtn')?.addEventListener('click', async () => {
   const confirmed = confirm('Sign out from Navify?');
   if (!confirmed) return;
 

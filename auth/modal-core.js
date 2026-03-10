@@ -1,11 +1,11 @@
 function openModal(modal) {
   if (!modal) return;
-  modal.classList.add('open');
+  modal.classList.add('show');
 }
 
 function closeModal(modal) {
   if (!modal) return;
-  modal.classList.remove('open');
+  modal.classList.remove('show');
 }
 
 function bindCloseHandlers() {
@@ -19,7 +19,7 @@ function bindCloseHandlers() {
     });
   });
 
-  ['signInModal', 'signUpModal', 'avatarModal', 'transportModal', 'categoryModal'].forEach((id) => {
+  ['signInModal', 'signUpModal', 'smOtpModal', 'avatarModal', 'transportModal', 'categoryModal'].forEach((id) => {
     const modal = document.getElementById(id);
     if (!modal || modal.dataset.bound) return;
     modal.dataset.bound = 'true';
@@ -39,5 +39,6 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeModal(document.getElementById('signInModal'));
     closeModal(document.getElementById('signUpModal'));
+    closeModal(document.getElementById('smOtpModal'));
   }
 });

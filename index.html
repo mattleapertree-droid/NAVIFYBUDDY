@@ -141,6 +141,25 @@
   <script src="auth/sign-in.js"></script>
   <script src="auth/sign-up.js"></script>
   <script>
+    // Check Firebase initialization status
+    let firebaseReady = false;
+    const maxWaitTime = 5000; // 5 seconds
+    const checkInterval = setInterval(() => {
+      if (window.navifyAuth && window.navifyDb) {
+        firebaseReady = true;
+        console.log('✓ Firebase is ready for authentication');
+        clearInterval(checkInterval);
+      }
+    }, 100);
+    
+    // Stop waiting after 5 seconds and log error
+    setTimeout(() => {
+      if (!firebaseReady) {
+        console.error('❌ Firebase initialization timeout - Auth might not work');
+      }
+      clearInterval(checkInterval);
+    }, maxWaitTime);
+
     // Guest access button - limited features only
     document.getElementById('guestBtn')?.addEventListener('click', () => {
       const confirmGuest = confirm(

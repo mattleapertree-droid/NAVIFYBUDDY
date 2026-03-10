@@ -58,11 +58,23 @@ function bindSignIn() {
     }
 
     try {
+      // Check if Firebase is initialized
+      if (!window.navifyAuth) {
+        showSignInError('Firebase authentication not initialized. Please refresh the page.');
+        return;
+      }
+
       enterAppBtn.disabled = true;
       enterAppBtn.textContent = 'Signing in...';
 
       // Sign in with email and password
-      const user = await navifyEmailSignIn(email, password);
+      let user;
+      try {
+        user = await navifyEmailSignIn(email, password);
+      } catch (firebaseErr) {
+        console.error('Sign-in error:', firebaseErr);
+        throw firebaseErr;
+      }
 
       // Check if phone is verified
       if (!user.phoneNumber) {

@@ -149,6 +149,11 @@ function bindSignUp() {
     }
 
     try {
+      // Check if Firebase is initialized
+      if (!window.navifyAuth) {
+        throw new Error('Firebase authentication not initialized. Please refresh the page.');
+      }
+
       verifyOtpBtn.disabled = true;
       verifyOtpBtn.textContent = 'Verifying...';
 
@@ -159,18 +164,44 @@ function bindSignUp() {
         // Get the signup data
         const signupData = window.getSignupData();
         
+        if (!signupData || !signupData.email || !signupData.password) {
+          throw new Error('Signup data corrupted. Please try again.');
+        }
+
         // Now create the Firebase account
-        const userCred = await window.navifyAuth.createUserWithEmailAndPassword(
-          signupData.email,
-          signupData.password
-        );
+        let userCred;
+        try {
+          userCred = await window.navifyAuth.createUserWithEmailAndPassword(
+            signupData.email,
+            signupData.password
+          );
+        } catch (firebaseErr) {
+          console.error('Firebase signup error:', firebaseErr);
+          if (firebaseErr.code === 'auth/email-already-in-use') {
+            throw new Error('This email is already registered. Please sign in instead.');
+          } else if (firebaseErr.code === 'auth/weak-password') {
+            throw new Error('Password is too weak. Please use a stronger password.');
+          } else if (firebaseErr.code === 'auth/invalid-email') {
+            throw new Error('Invalid email address.');
+          }
+          throw firebaseErr;
+        }
+
         const user = userCred.user;
         
         // Update display name
-        await user.updateProfile({ displayName: signupData.name });
+        try {
+          await user.updateProfile({ displayName: signupData.name });
+        } catch (profileErr) {
+          console.warn('Failed to update profile:', profileErr);
+        }
         
         // Store phone number in Firebase with verified flag
-        await window.verifyUserPhone(user.uid, signupData.phone);
+        try {
+          await window.verifyUserPhone(user.uid, signupData.phone);
+        } catch (phoneErr) {
+          console.warn('Failed to store phone verification:', phoneErr);
+        }
         
         // Send email verification
         try {

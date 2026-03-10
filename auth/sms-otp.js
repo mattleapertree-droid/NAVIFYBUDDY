@@ -40,6 +40,7 @@ window.sendSmsOtp = async (phone) => {
 
     // In production, send via Twilio, Firebase, or other SMS service
     console.log(`[MOCK SMS] OTP sent to ${phone}: ${code}`);
+    console.log('[DEV] Check browser console for test code above ↑');
     
     // For demo/testing: log the code to console
     // In production: actual SMS will be sent to user's phone

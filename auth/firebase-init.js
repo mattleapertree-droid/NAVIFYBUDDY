@@ -22,6 +22,10 @@ window.NAVIFY_FIREBASE_CONFIG = {
     window.navifyDb = firebase.database();
     window.navifyStorage = firebase.storage();
     
+    console.log('✓ Firebase initialized successfully');
+    console.log('Auth:', window.navifyAuth ? 'Ready' : 'Not ready');
+    console.log('Database:', window.navifyDb ? 'Ready' : 'Not ready');
+    
     // Listen for auth state changes - persist user session
     firebase.auth().onAuthStateChanged((user) => {
       if (user) {
@@ -73,10 +77,10 @@ window.formatPhoneNumber = (phone) => {
 
 // Store verified phone numbers for authentication
 window.verifyUserPhone = (userId, phoneNumber) => {
-  if (!validatePhoneNumber(phoneNumber)) {
+  if (!window.validatePhoneNumber(phoneNumber)) {
     return Promise.reject('Invalid phone number format');
   }
-  const formatted = formatPhoneNumber(phoneNumber);
+  const formatted = window.formatPhoneNumber(phoneNumber);
   return firebase.database().ref('users/' + userId + '/phone').set({
     number: formatted,
     verified: true,

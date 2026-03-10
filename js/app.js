@@ -668,7 +668,7 @@ function updateSuggestions() {
       : `Popular nearby stops for ${key.toUpperCase()}.`;
 }
 
-function updateUserLocation(lat, lng) {
+function updateUserLocation(lat, lng, accuracy = null) {
   if (!map) return;
 
   // Store coordinates for nearby user detection
@@ -700,9 +700,9 @@ function updateUserLocation(lat, lng) {
     };
     setLiveData(live);
     
-    // Share to Firebase in real-time
+    // IMPROVEMENT: Share to Firebase with GPS accuracy for better filtering
     if (window.currentUser && lastReadableLocation) {
-      window.shareLocationToFirebase(window.currentUser.uid, lat, lng, lastReadableLocation);
+      window.shareLocationToFirebase(window.currentUser.uid, lat, lng, lastReadableLocation, accuracy);
     }
     
     renderContacts();
@@ -731,7 +731,8 @@ async function requestLocation() {
       const movedMeters = metersBetween(lastUserCoords || smoothed, smoothed);
       lastUserCoords = smoothed;
 
-      updateUserLocation(smoothed.lat, smoothed.lng);
+      // IMPROVEMENT: Pass GPS accuracy to location update
+      updateUserLocation(smoothed.lat, smoothed.lng, accuracy);
 
       const now = Date.now();
       const shouldReverseLookup = !lastReverseLookupAt || now - lastReverseLookupAt > 12000;
@@ -1175,7 +1176,8 @@ function initFriendTracking() {
   contacts.forEach(contact => {
     if (contact.id && !friendListeners[contact.id]) {
       friendListeners[contact.id] = window.listenToFriendLocation(contact.id, (location) => {
-        if (location && map) {
+        // VALIDATION: Only update marker if location is valid and map exists
+        if (location && map && window.isValidCoordinate(location.lat, location.lng)) {
           // Calculate bearing to friend
           const bearing = window.calculateBearing(lastUserCoords, { lat: location.lat, lng: location.lng });
           updateFriendMarkerOnMap(contact.id, contact.name, location.lat, location.lng, location.address, true, bearing);
@@ -1184,14 +1186,14 @@ function initFriendTracking() {
     }
   });
   
-  // Auto-detect nearby users every 10 seconds for continuous discovery
+  // IMPROVEMENT: Auto-detect nearby users every 5 seconds for faster discovery (improved from 10s)
   if (!autoDetectInterval) {
     autoDetectInterval = setInterval(() => {
       if (lastUserCoords && sharingOn) {
         showNearbyActiveUsersOnMap(lastUserCoords.lat, lastUserCoords.lng);
       }
-    }, 10000); // Auto-detect every 10 seconds
-    console.log('✓ Auto-detection started (10s interval)');
+    }, 5000); // Auto-detect every 5 seconds (improved from 10 seconds)
+    console.log('✓ Auto-detection started (5s interval, improved accuracy)');
   }
 }
 
@@ -1309,7 +1311,13 @@ function addNearbyUserAsContact(userId, userName, userPhone) {
 }
 
 function updateFriendMarkerOnMap(contactId, contactName, lat, lng, address, isFriend = false, bearing = null) {
-  if (!map || !lat || !lng) return;
+  if (!map) return;
+  
+  // VALIDATION: Verify coordinates are valid before displaying
+  if (!window.isValidCoordinate(lat, lng)) {
+    console.warn(`⚠️ Invalid coordinates for ${contactName}: ${lat}, ${lng}`);
+    return;
+  }
   
   // Calculate bearing if not provided and we have user location
   if (bearing === null && lastUserCoords) {

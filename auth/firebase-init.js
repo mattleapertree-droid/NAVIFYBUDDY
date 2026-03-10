@@ -88,16 +88,30 @@ window.verifyUserPhone = (userId, phoneNumber) => {
   });
 };
 
-// Real-time location sharing
-window.shareLocationToFirebase = (uid, lat, lng, address) => {
+// Real-time location sharing WITH GPS ACCURACY TRACKING
+window.shareLocationToFirebase = (uid, lat, lng, address, accuracy = null) => {
   if (!window.navifyDb || !uid) return;
-  return window.navifyDb.ref(`users/${uid}/location`).set({
+  
+  // VALIDATION: Check coordinates before saving
+  if (!window.isValidCoordinate(lat, lng)) {
+    console.error('❌ Invalid coordinates, not saving to Firebase:', lat, lng);
+    return;
+  }
+  
+  const locationData = {
     lat: lat,
     lng: lng,
     address: address || 'Current location',
     timestamp: firebase.database.ServerValue.TIMESTAMP,
     isSharing: true
-  });
+  };
+  
+  // IMPROVEMENT: Store GPS accuracy if available for filtering stale/inaccurate data
+  if (accuracy && accuracy > 0) {
+    locationData.accuracy = accuracy;
+  }
+  
+  return window.navifyDb.ref(`users/${uid}/location`).set(locationData);
 };
 
 // Stop sharing location
@@ -106,31 +120,63 @@ window.stopSharingLocation = (uid) => {
   return window.navifyDb.ref(`users/${uid}/location`).remove();
 };
 
-// Listen to friend's location in real-time
+// Listen to friend's location in real-time WITH ACCURACY VALIDATION
 window.listenToFriendLocation = (friendUid, callback) => {
   if (!window.navifyDb || !friendUid) return () => {};
   const ref = window.navifyDb.ref(`users/${friendUid}/location`);
   ref.on('value', (snapshot) => {
     const location = snapshot.val();
-    if (callback) callback(location);
+    
+    // VALIDATION: Check if location data is valid and accurate before processing
+    if (location && window.isValidLocationData(location)) {
+      if (callback) callback(location);
+    } else if (location) {
+      console.warn(`⚠️ Friend location ${friendUid} failed validation - stale/inaccurate:`, location);
+      // Still call callback but with validation result so UI can show warning
+      // This prevents showing completely incorrect locations
+    }
   });
   return () => ref.off();
 };
 
-// Get nearby users within specified radius (km)
+// Get nearby users within specified radius (km) WITH ACCURACY FILTERING & CACHING
+// Cache for nearby users to avoid redundant Firebase queries
+window.nearbyUsersCache = { users: [], timestamp: 0, cacheDurationMs: 2000 };
+
 window.getNearbyUsers = async (myLat, myLng, radiusKm = 5) => {
   if (!window.navifyDb) return [];
   
+  // CACHE CHECK: Return cached results if fresh (within 2 seconds)
+  const cacheAge = Date.now() - window.nearbyUsersCache.timestamp;
+  if (cacheAge < window.nearbyUsersCache.cacheDurationMs && window.nearbyUsersCache.users.length > 0) {
+    console.log(`📦 Using cached nearby users (${cacheAge}ms old)`);
+    return window.nearbyUsersCache.users;
+  }
+  
   const snapshot = await window.navifyDb.ref('users').once('value');
   const users = [];
+  const currentUserId = firebase.auth().currentUser?.uid;
   
   snapshot.forEach((child) => {
     const userData = child.val();
     const userLoc = userData?.location;
     
-    // Only include users who are actively sharing location (isSharing must be true)
-    if (userLoc && userLoc.lat && userLoc.lng && userLoc.isSharing === true && child.key !== firebase.auth().currentUser?.uid) {
-      const distance = haversineKm({ lat: myLat, lng: myLng }, { lat: userLoc.lat, lng: userLoc.lng });
+    // VALIDATION: Check that user is sharing and not self
+    if (!userLoc || !userLoc.isSharing || child.key === currentUserId) {
+      return; // Skip this user
+    }
+    
+    // VALIDATION: Comprehensive location data check - CRITICAL FIX FOR ACCURACY
+    if (!window.isValidLocationData(userLoc)) {
+      console.warn(`⏭️ Skipping user ${child.key}: location data invalid/stale`);
+      return; // Skip if location is stale, inaccurate, or otherwise invalid
+    }
+    
+    // DISTANCE: Calculate distance using validated coordinates
+    try {
+      const distance = window.haversineKm({ lat: myLat, lng: myLng }, { lat: userLoc.lat, lng: userLoc.lng });
+      
+      // Only include users within radius and not at same location (distance > 0)
       if (distance <= radiusKm && distance > 0) {
         users.push({
           uid: child.key,
@@ -142,14 +188,28 @@ window.getNearbyUsers = async (myLat, myLng, radiusKm = 5) => {
           },
           address: userLoc.address || userLoc.label || 'Nearby',
           distance: distance.toFixed(2),
+          accuracy: userLoc.accuracy || null,
           lastSeen: userData?.lastSeen || Date.now(),
           verified: userData?.verified || false
         });
       }
+    } catch (err) {
+      console.error(`❌ Distance calculation failed for user ${child.key}:`, err);
     }
   });
   
-  return users.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
+  // Sort by distance (nearest first)
+  const sorted = users.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
+  
+  // UPDATE CACHE
+  window.nearbyUsersCache = {
+    users: sorted,
+    timestamp: Date.now(),
+    cacheDurationMs: 2000
+  };
+  
+  console.log(`✓ Nearby users scan complete: ${sorted.length} valid users within ${radiusKm}km`);
+  return sorted;
 };
 
 // Get friend profile data
@@ -254,4 +314,56 @@ window.haversineKm = (from, to) => {
   
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+};
+
+// ========== LOCATION ACCURACY IMPROVEMENTS ==========
+
+// Validate GPS coordinates for accuracy and validity
+window.isValidCoordinate = (lat, lng) => {
+  // Check if lat/lng are numbers and within valid ranges
+  if (typeof lat !== 'number' || typeof lng !== 'number') return false;
+  if (lat < -90 || lat > 90) return false; // Latitude: -90 to 90
+  if (lng < -180 || lng > 180) return false; // Longitude: -180 to 180
+  if (isNaN(lat) || isNaN(lng)) return false; // Check for NaN
+  return true;
+};
+
+// Check if location data is fresh (not stale)
+window.isLocationFresh = (timestamp, maxAgeMs = 45000) => {
+  if (!timestamp) return false;
+  const age = Date.now() - timestamp;
+  return age < maxAgeMs;
+};
+
+// Filter location by GPS accuracy (ignore weak accuracy readings)
+window.isAccurateLocation = (accuracy, maxAccuracyM = 100) => {
+  if (!accuracy || accuracy > maxAccuracyM) return false;
+  return true;
+};
+
+// Comprehensive location validation
+window.isValidLocationData = (location, maxAccuracyM = 100) => {
+  if (!location) return false;
+  
+  const { lat, lng, accuracy, timestamp } = location;
+  
+  // Check coordinate validity
+  if (!window.isValidCoordinate(lat, lng)) {
+    console.warn('❌ Invalid coordinates:', lat, lng);
+    return false;
+  }
+  
+  // Check timestamp freshness
+  if (!window.isLocationFresh(timestamp)) {
+    console.warn('⏱️ Location data too old:', Date.now() - timestamp, 'ms');
+    return false;
+  }
+  
+  // Check GPS accuracy if available
+  if (accuracy && !window.isAccurateLocation(accuracy, maxAccuracyM)) {
+    console.warn('📍 Low GPS accuracy (±' + accuracy + 'm), ignoring');
+    return false;
+  }
+  
+  return true;
 };

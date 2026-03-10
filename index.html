@@ -166,13 +166,8 @@
       }
     });
 
-    // Auto-redirect if already logged in
-    document.addEventListener('DOMContentLoaded', () => {
-      const user = localStorage.getItem('navify-user');
-      if (user) {
-        window.location.href = 'pages/home.html';
-      }
-    });
+    // Note: Removed auto-redirect on page load to allow users to see login/signup page
+    // Users can manually navigate to home.html or will be redirected after signing in/up
   </script>
 </body>
 </html>

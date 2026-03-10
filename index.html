@@ -75,9 +75,14 @@
       <div class="modal" id="signInModal" aria-hidden="true">
         <div class="modal-card" role="dialog" aria-label="Sign in options">
           <div class="modal-title">Sign In</div>
+          <div id="signInError" style="color: var(--danger); font-size: 12px; margin-bottom: 12px; display: none;"></div>
           <div class="form">
-            <input class="input" type="email" placeholder="Email" />
-            <input class="input" type="password" placeholder="Password" />
+            <input class="input" type="email" id="signInEmail" placeholder="Email" />
+            <input class="input" type="password" id="signInPassword" placeholder="Password" />
+            <label style="display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin-top: 12px; cursor: pointer;">
+              <input type="checkbox" id="rememberMeCheckbox" style="cursor: pointer;" />
+              Remember me on this device
+            </label>
           </div>
           <button class="button" id="enterAppBtn">Enter App</button>
           <button class="modal-close" data-close="#signInModal">Close</button>
@@ -88,13 +93,37 @@
       <div class="modal" id="signUpModal" aria-hidden="true">
         <div class="modal-card" role="dialog" aria-label="Create account">
           <div class="modal-title">Sign Up</div>
+          <div id="signUpError" style="color: var(--danger); font-size: 12px; margin-bottom: 12px; display: none;"></div>
           <div class="form">
-            <input class="input" type="text" placeholder="Username" />
-            <input class="input" type="email" placeholder="Email" />
-            <input class="input" type="password" placeholder="Password" />
+            <input class="input" type="text" id="signUpName" placeholder="Full Name" />
+            <input class="input" type="email" id="signUpEmail" placeholder="Email" />
+            <input class="input" type="tel" id="signUpPhone" placeholder="Phone: 09XXXXXXXXX or +639XXXXXXXXX" />
+            <input class="input" type="password" id="signUpPassword" placeholder="Password (min 8 chars)" />
+            <input class="input" type="password" id="signUpConfirm" placeholder="Confirm Password" />
+            <label style="display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin-top: 12px; cursor: pointer;">
+              <input type="checkbox" id="signUpTerms" style="cursor: pointer;" />
+              I agree to Terms & Privacy Policy
+            </label>
           </div>
-          <button class="button" id="createAccountBtn">Create account</button>
+          <button class="button" id="createAccountBtn">Create account & Verify Phone</button>
           <button class="modal-close" data-close="#signUpModal">Close</button>
+        </div>
+      </div>
+
+      <!-- SMS OTP Verification Modal -->
+      <div class="modal" id="smOtpModal" aria-hidden="true">
+        <div class="modal-card" role="dialog" aria-label="Verify phone with SMS">
+          <div class="modal-title">Phone Verification</div>
+          <div class="panel-sub" style="margin-bottom: 16px;">We sent a 6-digit code to your phone. Enter it below to verify your account.</div>
+          <div id="smsOtpError" style="color: var(--danger); font-size: 12px; margin-bottom: 12px; display: none;"></div>
+          <div class="form">
+            <input class="input" type="text" id="smsOtpCode" placeholder="000000" maxlength="6" style="text-align: center; font-size: 24px; letter-spacing: 4px; font-weight: bold;" />
+            <div style="font-size: 12px; color: var(--muted); text-align: center; margin-top: 12px;">
+              Didn't get the code? <span id="resendOtpBtn" style="color: var(--cyan); cursor: pointer; text-decoration: underline;">Resend</span>
+            </div>
+          </div>
+          <button class="button" id="verifyOtpBtn">Verify & Complete Signup</button>
+          <button class="modal-close" data-close="#smOtpModal">Cancel</button>
         </div>
       </div>
     </div>
@@ -103,22 +132,38 @@
   <script src="js/theme.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
   <script src="auth/firebase-init.js"></script>
   <script src="auth/reset-local.js"></script>
   <script src="auth/firebase-auth.js"></script>
   <script src="auth/modal-core.js"></script>
+  <script src="auth/sms-otp.js"></script>
   <script src="auth/sign-in.js"></script>
   <script src="auth/sign-up.js"></script>
   <script>
-    // Guest access button
+    // Guest access button - limited features only
     document.getElementById('guestBtn')?.addEventListener('click', () => {
-      localStorage.setItem('navify-user', JSON.stringify({
-        uid: 'guest_' + Date.now(),
-        email: null,
-        name: 'Guest',
-        photoURL: null
-      }));
-      window.location.href = 'pages/home.html';
+      const confirmGuest = confirm(
+        'Guest Mode has limited features.\n\n' +
+        'To unlock full features like:\n' +
+        '- Real-time location sharing\n' +
+        '- Nearby friend detection\n' +
+        '- Voice calling\n' +
+        '- Saved places\n\n' +
+        'Please sign up for a free account!\n\n' +
+        'Continue as guest anyway?'
+      );
+
+      if (confirmGuest) {
+        localStorage.setItem('navify-user', JSON.stringify({
+          uid: 'guest_' + Date.now(),
+          email: null,
+          name: 'Guest',
+          photoURL: null,
+          isGuest: true
+        }));
+        window.location.href = 'pages/home.html';
+      }
     });
 
     // Auto-redirect if already logged in

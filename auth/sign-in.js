@@ -2,28 +2,106 @@ function bindSignIn() {
   const signInBtn = document.getElementById('signInBtn');
   const signInModal = document.getElementById('signInModal');
   const enterAppBtn = document.getElementById('enterAppBtn');
-  const emailInput = signInModal?.querySelector('input[type="email"]');
-  const passwordInput = signInModal?.querySelector('input[type="password"]');
+  const emailInput = signInModal?.querySelector('#signInEmail');
+  const passwordInput = signInModal?.querySelector('#signInPassword');
+  const rememberMeCheckbox = signInModal?.querySelector('#rememberMeCheckbox');
+  const signInError = signInModal?.querySelector('#signInError');
   const socials = signInModal?.querySelectorAll('.social-btn');
   const authScreen = document.getElementById('authScreen');
 
-  signInBtn?.addEventListener('click', () => openModal(signInModal));
+  // Load saved email if "Remember Me" was previously checked
+  document.addEventListener('DOMContentLoaded', () => {
+    const savedEmail = localStorage.getItem('navify-saved-email');
+    if (savedEmail && emailInput) {
+      emailInput.value = savedEmail;
+      if (rememberMeCheckbox) {
+        rememberMeCheckbox.checked = true;
+      }
+    }
+  });
+
+  function showSignInError(message) {
+    if (signInError) {
+      signInError.textContent = message;
+      signInError.style.display = 'block';
+    }
+  }
+
+  function hideSignInError() {
+    if (signInError) {
+      signInError.style.display = 'none';
+    }
+  }
+
+  signInBtn?.addEventListener('click', () => {
+    hideSignInError();
+    openModal(signInModal);
+  });
+
   enterAppBtn?.addEventListener('click', async () => {
+    hideSignInError();
+    
     if (!emailInput || !passwordInput) return;
+    
     const email = emailInput.value.trim();
     const password = passwordInput.value.trim();
+    const rememberMe = rememberMeCheckbox?.checked || false;
+
     if (!email || !password) {
-      alert('Please enter your email and password.');
+      showSignInError('Please enter your email and password.');
       return;
     }
+
+    if (!email.includes('@')) {
+      showSignInError('Please enter a valid email address.');
+      return;
+    }
+
     try {
-      await navifyEmailSignIn(email, password);
+      enterAppBtn.disabled = true;
+      enterAppBtn.textContent = 'Signing in...';
+
+      // Sign in with email and password
+      const user = await navifyEmailSignIn(email, password);
+
+      // Check if phone is verified
+      if (!user.phoneNumber) {
+        console.warn('Note: User phone number not yet verified in Firebase');
+      }
+
+      // Save email if "Remember Me" is checked
+      if (rememberMe) {
+        localStorage.setItem('navify-saved-email', email);
+        localStorage.setItem('navify-remember-me', 'true');
+      } else {
+        localStorage.removeItem('navify-saved-email');
+        localStorage.removeItem('navify-remember-me');
+      }
+
       closeModal(signInModal);
       authScreen?.setAttribute('hidden', 'true');
-      window.location.href = 'home.html';
+      window.location.href = 'pages/home.html';
     } catch (err) {
       console.error('Email sign-in failed', err);
-      alert('Sign in failed. Check your details or try Google/Facebook.');
+      
+      // Handle specific Firebase errors
+      let errorMessage = 'Sign in failed. Check your details or try again.';
+      if (err.code === 'auth/user-not-found') {
+        errorMessage = 'No account found with this email. Please sign up first.';
+      } else if (err.code === 'auth/wrong-password') {
+        errorMessage = 'Incorrect password. Please try again.';
+      } else if (err.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address.';
+      } else if (err.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed attempts. Please try again later.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      showSignInError(errorMessage);
+    } finally {
+      enterAppBtn.disabled = false;
+      enterAppBtn.textContent = 'Enter App';
     }
   });
 
@@ -33,26 +111,34 @@ function bindSignIn() {
       if (label === 'google') {
         btn.addEventListener('click', async () => {
           try {
+            hideSignInError();
+            enterAppBtn.disabled = true;
             await navifyGoogleSignIn();
             closeModal(signInModal);
             authScreen?.setAttribute('hidden', 'true');
-            window.location.href = 'home.html';
+            window.location.href = 'pages/home.html';
           } catch (err) {
             console.error('Google sign-in failed', err);
-            alert('Google sign-in failed. Check your Firebase configuration.');
+            showSignInError('Google sign-in failed. Please check your Firebase configuration.');
+          } finally {
+            enterAppBtn.disabled = false;
           }
         });
       }
       if (label === 'facebook') {
         btn.addEventListener('click', async () => {
           try {
+            hideSignInError();
+            enterAppBtn.disabled = true;
             await navifyFacebookSignIn();
             closeModal(signInModal);
             authScreen?.setAttribute('hidden', 'true');
-            window.location.href = 'home.html';
+            window.location.href = 'pages/home.html';
           } catch (err) {
             console.error('Facebook sign-in failed', err);
-            alert('Facebook sign-in failed. Check your Firebase configuration.');
+            showSignInError('Facebook sign-in failed. Please check your Firebase configuration.');
+          } finally {
+            enterAppBtn.disabled = false;
           }
         });
       }

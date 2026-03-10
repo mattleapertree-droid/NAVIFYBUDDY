@@ -98,7 +98,13 @@
           <div class="eta-badge" id="etaLabel">ETA: --</div>
         </div>
 
-        <div id="map" class="map-live"></div>
+        <div id="mapContainer" class="map-container">
+          <div id="map" class="map-live"></div>
+          <div class="map-controls">
+            <button class="map-control-btn" id="centerMapBtn" title="Center on my location">📍</button>
+            <button class="map-control-btn" id="toggleMapThemeBtn" title="Toggle map theme">🌙</button>
+          </div>
+        </div>
 
         <div class="panel-sub" id="safetyNote">Safety status: waiting for destination.</div>
         
@@ -199,7 +205,8 @@
       <div class="action-grid">
         <button class="primary-btn" id="voiceCallBtn" type="button">📞 Voice Call</button>
         <button class="primary-btn" id="callContactBtn" type="button">☎️ Call</button>
-        <button class="primary-btn" id="textContactBtn" type="button">💬 Text</button>
+        <button class="primary-btn" id="messageContactBtn" type="button">💬 Message</button>
+        <button class="primary-btn" id="textContactBtn" type="button">📱 Text</button>
         <button class="primary-btn" id="emailContactBtn" type="button">✉️ Email</button>
         <button class="secondary-btn" id="locateContactBtn" type="button">📍 Locate</button>
         <button class="secondary-btn" id="shareMyLocationBtn" type="button">📤 Share Location</button>
@@ -208,6 +215,57 @@
 
       <div class="action-row">
         <button class="secondary-btn modal-close" data-close="#contactModal" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Guide Me Transport Selection Modal -->
+  <div class="modal" id="guideMeModal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-title">Choose How to Travel</div>
+      <div class="panel-sub">Select your preferred transportation method:</div>
+      
+      <div class="action-grid" style="margin-top: 20px;">
+        <button class="quick-card" onclick="startGuidance('walk')" type="button" style="text-align: center;">
+          <div style="font-size: 32px; margin-bottom: 8px;">🚶</div>
+          <div class="quick-title">Walking</div>
+          <div class="quick-sub">Pedestrian routes</div>
+        </button>
+        <button class="quick-card" onclick="startGuidance('car')" type="button" style="text-align: center;">
+          <div style="font-size: 32px; margin-bottom: 8px;">🚗</div>
+          <div class="quick-title">By Car</div>
+          <div class="quick-sub">Driving routes</div>
+        </button>
+        <button class="quick-card" onclick="startGuidance('transit')" type="button" style="text-align: center;">
+          <div style="font-size: 32px; margin-bottom: 8px;">🚌</div>
+          <div class="quick-title">Public Transit</div>
+          <div class="quick-sub">Bus/Train/MRT</div>
+        </button>
+      </div>
+
+      <div class="action-row">
+        <button class="secondary-btn modal-close" data-close="#guideMeModal" type="button" style="flex: 1;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Messaging Modal -->
+  <div class="modal" id="messagingModal" aria-hidden="true">
+    <div class="modal-card" style="display: flex; flex-direction: column; max-height: 90vh;">
+      <div class="modal-title" id="messagingContactName">Messages</div>
+      <div class="panel-sub" id="messagingContactDisplay" style="margin-bottom: 12px;">Conversation</div>
+      
+      <div id="messagesContainer" style="flex: 1; overflow-y: auto; background: rgba(0, 0, 0, 0.2); border-radius: 12px; padding: 12px; margin-bottom: 12px; min-height: 200px; display: flex; flex-direction: column; gap: 8px;">
+        <!-- Messages will be rendered here -->
+      </div>
+
+      <div style="display: flex; gap: 8px; align-items: flex-end;">
+        <input id="messageInput" class="input" placeholder="Type a message..." style="flex: 1;" />
+        <button class="primary-btn" id="sendMessageBtn" type="button" style="padding: 14px 20px;">Send</button>
+      </div>
+
+      <div class="action-row" style="margin-top: 12px;">
+        <button class="secondary-btn modal-close" data-close="#messagingModal" type="button" style="width: 100%;">Close</button>
       </div>
     </div>
   </div>
@@ -290,10 +348,11 @@
       </label>
 
       <div style="border-top: 1px solid rgba(123, 241, 255, 0.2); padding-top: 12px; margin-top: 16px;">
-        <div style="font-size: 13px; color: var(--muted); margin-bottom: 8px; font-weight: bold;">Information</div>
+        <div style="font-size: 13px; color: var(--muted); margin-bottom: 8px; font-weight: bold;">Information & Legal</div>
         <div class="action-row" style="gap: 8px;">
           <button class="secondary-btn" onclick="window.location.href='../pages/about.html'" type="button" style="flex: 1;">ℹ️ About</button>
           <button class="secondary-btn" onclick="window.location.href='../pages/team.html'" type="button" style="flex: 1;">👥 Team</button>
+          <button class="secondary-btn" onclick="showTermsAndConditions()" type="button" style="flex: 1;">📋 T&C</button>
         </div>
       </div>
 
@@ -304,6 +363,48 @@
       <div class="action-row">
         <button class="primary-btn" id="savePrefsBtn" type="button">Save</button>
         <button class="secondary-btn modal-close" data-close="#prefsModal" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Terms & Conditions Modal -->
+  <div class="modal" id="termsModal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-title">Terms & Conditions</div>
+      <div style="max-height: 60vh; overflow-y: auto; font-size: 13px; line-height: 1.6; color: var(--text);">
+        <div style="margin-bottom: 16px;">
+          <strong style="color: var(--cyan);">1. Use License</strong>
+          <p style="margin-top: 8px; color: var(--muted);">Permission is granted to temporarily download one copy of the materials (information or software) on NAVIFY for personal, non-commercial transitory viewing only. This is the grant of a license, not a transfer of title, and under this license you may not:</p>
+          <ul style="margin-top: 8px; color: var(--muted);">
+            <li>Modifying or copying the materials</li>
+            <li>Using the materials for any commercial purpose or for any public display</li>
+            <li>Attempting to decompile or reverse engineer any software contained on NAVIFY</li>
+            <li>Removing any copyright or other proprietary notations from the materials</li>
+          </ul>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <strong style="color: var(--cyan);">2. Location & Privacy</strong>
+          <p style="margin-top: 8px; color: var(--muted);">You understand and agree that location data shared through NAVIFY is only visible to your trusted contacts. We do not store or sell your location data. All location sharing is end-to-end encrypted.</p>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <strong style="color: var(--cyan);">3. Disclaimer</strong>
+          <p style="margin-top: 8px; color: var(--muted);">The materials on NAVIFY are provided on an 'as is' basis. We make no warranties, expressed or implied, and hereby disclaim and negate all other warranties including, without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights.</p>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <strong style="color: var(--cyan);">4. User Responsibilities</strong>
+          <p style="margin-top: 8px; color: var(--muted);">You agree not to harass, threaten, embarrass or cause distress or unwanted attention to any user of NAVIFY. Misuse of the location tracking feature may result in account termination.</p>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <strong style="color: var(--cyan);">5. Changes to Terms</strong>
+          <p style="margin-top: 8px; color: var(--muted);">NAVIFY may revise these terms of use for our website at any time without notice. By using this website, you are agreeing to be bound by the then current version of these terms of use.</p>
+        </div>
+      </div>
+      <div class="action-row">
+        <button class="secondary-btn modal-close" data-close="#termsModal" type="button" style="width: 100%;">Close</button>
       </div>
     </div>
   </div>

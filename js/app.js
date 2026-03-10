@@ -24,6 +24,22 @@ const safetyNote = document.getElementById('safetyNote');
 const suggestList = document.getElementById('suggestList');
 const suggestionsHint = document.getElementById('suggestionsHint');
 
+// Map controls
+const centerMapBtn = document.getElementById('centerMapBtn');
+const toggleMapThemeBtn = document.getElementById('toggleMapThemeBtn');
+
+// Guide Me and Messaging
+const guideMeModal = document.getElementById('guideMeModal');
+const messagingModal = document.getElementById('messagingModal');
+const messagingContactName = document.getElementById('messagingContactName');
+const messageInput = document.getElementById('messageInput');
+const sendMessageBtn = document.getElementById('sendMessageBtn');
+const messagesContainer = document.getElementById('messagesContainer');
+const messageContactBtn = document.getElementById('messageContactBtn');
+
+// Terms
+const termsModal = document.getElementById('termsModal');
+
 const contactList = document.getElementById('contactList');
 const liveStatus = document.getElementById('liveStatus');
 const shareToggle = document.getElementById('shareToggle');
@@ -62,6 +78,7 @@ const NAME_KEY = 'navify_name_v2';
 const AVATAR_KEY = 'navify_avatar_v2';
 const DESTINATION_KEY = 'navify-guide-target';
 const SHARE_STATE_KEY = 'navify_share_on_v2';
+const MESSAGES_KEY = 'navify_messages_v2';
 
 let map = null;
 let userMarker = null;
@@ -75,6 +92,11 @@ let lastUserCoords = null;
 let lastReadableLocation = '';
 let lastReverseLookupAt = 0;
 let lastRouteRefreshAt = 0;
+
+// Map theme and messaging
+let mapTheme = localStorage.getItem('mapTheme') || 'dark';
+let currentMessagingContactId = null;
+let messagesListener = null;
 
 // Friend location tracking
 let friendMarkers = {};
@@ -390,10 +412,20 @@ function initMap() {
 
   map = L.map(mapEl, { zoomControl: true }).setView([14.5995, 120.9842], 13);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // Set tile layer based on theme
+  const tileUrl = mapTheme === 'light'
+    ? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+    : 'https://{s}.tile.openstreetmap.de/tiles/osmde/{z}/{x}/{y}.png';
+
+  L.tileLayer(tileUrl, {
     maxZoom: 19,
     attribution: ''
   }).addTo(map);
+
+  // Update theme button
+  if (toggleMapThemeBtn) {
+    toggleMapThemeBtn.textContent = mapTheme === 'light' ? '🌙' : '☀️';
+  }
 
   map.on('click', async (e) => {
     if (mapDescription) mapDescription.textContent = 'Getting place name...';
@@ -1554,6 +1586,137 @@ function restoreDestination() {
   }
 }
 
+// Map control functions
+function centerMapOnUser() {
+  if (!map || !userMarker) {
+    alert('Please enable location first.');
+    return;
+  }
+  const coords = userMarker.getLatLng();
+  map.flyTo([coords.lat, coords.lng], 16, { duration: 1 });
+}
+
+function toggleMapTheme() {
+  if (!map) return;
+  
+  mapTheme = mapTheme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('mapTheme', mapTheme);
+  
+  // Update button text
+  if (toggleMapThemeBtn) {
+    toggleMapThemeBtn.textContent = mapTheme === 'light' ? '🌙' : '☀️';
+  }
+  
+  // Reload map with new tile layer
+  map.eachLayer((layer) => {
+    if (layer instanceof L.TileLayer) {
+      map.removeLayer(layer);
+    }
+  });
+  
+  const tileUrl = mapTheme === 'light'
+    ? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+    : 'https://{s}.tile.openstreetmap.de/tiles/osmde/{z}/{x}/{y}.png';
+
+  L.tileLayer(tileUrl, {
+    maxZoom: 19,
+    attribution: ''
+  }).addTo(map);
+}
+
+// Guide Me with transport mode selection
+function startGuidance(mode) {
+  window.currentTransportMode = mode;
+  localStorage.setItem('transportMode', mode);
+  
+  // Close guide modal
+  closeModal(guideMeModal);
+  
+  if (!selectedDestination) {
+    alert('Please select a destination first.');
+    return;
+  }
+  
+  // Draw route with selected mode
+  if (userMarker) {
+    drawRoute(selectedDestination.lat, selectedDestination.lng);
+  }
+  
+  console.log(`📍 Navigating by ${mode}`);
+}
+
+// Messaging functions
+function openMessagingWith(contactId) {
+  if (!contactId) return;
+  
+  currentMessagingContactId = contactId;
+  const contact = getContacts().find(c => c.id === contactId);
+  
+  if (!contact) {
+    alert('Contact not found.');
+    return;
+  }
+  
+  messagingContactName.textContent = `Chat with ${contact.name}`;
+  loadMessages(contactId);
+  openModal(messagingModal);
+}
+
+function loadMessages(contactId) {
+  const messages = JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}');
+  const key = `${window.currentUser?.uid}__${contactId}`;
+  const convo = messages[key] || [];
+  
+  messagesContainer.innerHTML = '';
+  convo.forEach(msg => {
+    const sent = msg.from === window.currentUser?.uid;
+    const div = document.createElement('div');
+    div.className = `message-item ${sent ? 'sent' : 'received'}`;
+    div.innerHTML = `
+      <div class="message-bubble ${sent ? 'sent' : 'received'}">
+        ${escapeHtml(msg.text)}
+        <div class="message-time">${new Date(msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+      </div>
+    `;
+    messagesContainer.appendChild(div);
+  });
+  
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function sendMessage() {
+  const text = messageInput?.value.trim();
+  if (!text || !currentMessagingContactId) return;
+  
+  const messages = JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}');
+  const key = `${window.currentUser?.uid}__${currentMessagingContactId}`;
+  const convo = messages[key] || [];
+  
+  convo.push({
+    from: window.currentUser?.uid,
+    to: currentMessagingContactId,
+    text,
+    time: Date.now()
+  });
+  
+  messages[key] = convo;
+  localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages));
+  
+  messageInput.value = '';
+  loadMessages(currentMessagingContactId);
+  
+  console.log('✉️ Message sent');
+}
+
+function escapeHtml(text) {
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+function showTermsAndConditions() {
+  openModal(termsModal);
+}
+
 avatarBtn?.addEventListener('click', () => openModal(avatarModal));
 openShareModal?.addEventListener('click', () => openModal(shareModal));
 menuBtn?.addEventListener('click', () => openModal(prefsModal));
@@ -1769,6 +1932,35 @@ emailContactBtn?.addEventListener('click', () => {
 locateContactBtn?.addEventListener('click', locateCurrentContact);
 shareMyLocationBtn?.addEventListener('click', shareMyLocationWithCurrentContact);
 deleteContactBtn?.addEventListener('click', deleteCurrentContact);
+
+// New event listeners for map controls and messaging
+centerMapBtn?.addEventListener('click', centerMapOnUser);
+toggleMapThemeBtn?.addEventListener('click', toggleMapTheme);
+
+// Guide Me transport selection
+walkRouteBtn?.addEventListener('click', () => {
+  if (!selectedDestination) {
+    alert('Please select a destination on the map first.');
+    return;
+  }
+  openModal(guideMeModal);
+});
+
+// Messaging
+sendMessageBtn?.addEventListener('click', sendMessage);
+messageInput?.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+messageContactBtn?.addEventListener('click', () => {
+  const contact = getCurrentContact();
+  if (contact) {
+    openMessagingWith(contact.id);
+  }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   initMap();

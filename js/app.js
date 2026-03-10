@@ -534,7 +534,26 @@ function drawRoute(destLat, destLng) {
   });
 }
 
+// ===== PERFORMANCE OPTIMIZATIONS =====
+
+// Cache for reverse geocoding to reduce API calls
+const geocodeCache = new Map();
+const MAX_CACHE_AGE = 3600000; // 1 hour
+
 async function reverseGeocode(lat, lng) {
+  const ROUND = 4; // Cache at 0.0001 precision (11m accuracy)
+  const cacheKey = `${(lat).toFixed(ROUND)},${(lng).toFixed(ROUND)}`;
+  
+  // CHECK CACHE: Return cached result if available and fresh
+  if (geocodeCache.has(cacheKey)) {
+    const cached = geocodeCache.get(cacheKey);
+    if (Date.now() - cached.timestamp < MAX_CACHE_AGE) {
+      return cached.data;
+    } else {
+      geocodeCache.delete(cacheKey); // Delete expired entry
+    }
+  }
+  
   const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
   try {
     const res = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -549,12 +568,26 @@ async function reverseGeocode(lat, lng) {
       data.address?.city ||
       'Selected place';
 
-    return {
+    const result = {
       lat,
       lng,
       label,
       fullAddress: data.display_name || label
     };
+    
+    // CACHE RESULT: Store for future lookups
+    geocodeCache.set(cacheKey, {
+      data: result,
+      timestamp: Date.now()
+    });
+    
+    // CLEANUP: Remove oldest entries if cache gets too large
+    if (geocodeCache.size > 100) {
+      const oldestKey = geocodeCache.keys().next().value;
+      geocodeCache.delete(oldestKey);
+    }
+    
+    return result;
   } catch {
     return {
       lat,

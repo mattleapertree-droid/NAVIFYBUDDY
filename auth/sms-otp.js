@@ -1,5 +1,13 @@
 // SMS OTP Verification System
-// Mock implementation for development - in production use Twilio or Firebase Phone Auth
+// 
+// DEVELOPMENT MODE: Uses mock SMS with test code displayed on page
+// PRODUCTION MODE: Replace with Twilio, Firebase Phone Auth, or similar
+//
+// To use real SMS in production:
+// 1. Sign up for Twilio (twilio.com) or Firebase Phone Authentication
+// 2. Get API credentials
+// 3. Replace sendSmsOtp function with real SMS service call
+// 4. Update verifyUrOtp to work with real SMS provider
 
 let pendingOtpData = {
   code: null,
@@ -18,7 +26,9 @@ function generateOtpCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Send SMS OTP to user's phone (mock implementation)
+// Send SMS OTP to user's phone
+// DEVELOPMENT: Displays test code on page
+// PRODUCTION: Use Twilio, Firebase Phone Auth, etc.
 window.sendSmsOtp = async (phone) => {
   try {
     // Validate phone format
@@ -38,19 +48,40 @@ window.sendSmsOtp = async (phone) => {
       attempts: 0
     };
 
-    // In production, send via Twilio, Firebase, or other SMS service
-    console.log(`[MOCK SMS] OTP sent to ${phone}: ${code}`);
-    console.log('[DEV] Check browser console for test code above ↑');
+    console.log(`[SMS OTP Generated] Phone: ${phone}, Code: ${code}`);
     
-    // For demo/testing: log the code to console
-    // In production: actual SMS will be sent to user's phone
-    // For now, also store in localStorage for testing (remove in production)
+    // DEVELOPMENT MODE: Store in localStorage for testing
     localStorage.setItem('_dev_otp', code);
+    
+    // DEVELOPMENT MODE: Display on page
+    const devCodeBox = document.getElementById('devTestCodeBox');
+    const devCodeDisplay = document.getElementById('devTestCode');
+    if (devCodeBox && devCodeDisplay) {
+      devCodeBox.style.display = 'block';
+      devCodeDisplay.textContent = code;
+    }
+    
+    // PRODUCTION: Uncomment below and add your SMS service
+    /*
+    // EXAMPLE: Using Twilio (install twilio-node)
+    const twilio = require('twilio');
+    const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+    await client.messages.create({
+      body: `Your Navify verification code is: ${code}`,
+      from: TWILIO_PHONE_NUMBER,
+      to: phone
+    });
+    
+    // EXAMPLE: Using Firebase Phone Authentication
+    const appVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container');
+    const confirmationResult = await firebase.auth().signInWithPhoneNumber(phone, appVerifier);
+    // User receives SMS automatically from Firebase
+    */
     
     return {
       success: true,
       message: `Verification code sent to ${phone}`,
-      devTestCode: code // Remove in production
+      devTestCode: code
     };
   } catch (err) {
     console.error('Failed to send OTP:', err);
@@ -89,6 +120,12 @@ window.verifySmsOtp = (enteredCode) => {
     
     // Code is correct - clear development OTP from localStorage
     localStorage.removeItem('_dev_otp');
+    
+    // Hide test code display
+    const devCodeBox = document.getElementById('devTestCodeBox');
+    if (devCodeBox) {
+      devCodeBox.style.display = 'none';
+    }
     
     return {
       success: true,
@@ -136,4 +173,10 @@ window.clearOtpData = () => {
     attempts: 0
   };
   localStorage.removeItem('_dev_otp');
+  
+  // Hide test code display
+  const devCodeBox = document.getElementById('devTestCodeBox');
+  if (devCodeBox) {
+    devCodeBox.style.display = 'none';
+  }
 };

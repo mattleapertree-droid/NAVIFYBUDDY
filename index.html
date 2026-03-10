@@ -114,12 +114,21 @@
       <div class="modal" id="smOtpModal" aria-hidden="true">
         <div class="modal-card" role="dialog" aria-label="Verify phone with SMS">
           <div class="modal-title">Phone Verification</div>
-          <div class="panel-sub" style="margin-bottom: 16px;">We sent a 6-digit code to your phone. Enter it below to verify your account.</div>
+          <div class="panel-sub" style="margin-bottom: 16px;">A 6-digit verification code was sent to your phone</div>
+          
+          <!-- TEST CODE DISPLAY FOR DEVELOPMENT -->
+          <div id="devTestCodeBox" style="display: none; background: rgba(123, 241, 255, 0.15); border: 1px solid rgba(123, 241, 255, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px; text-align: center;">
+            <div style="font-size: 11px; color: var(--muted); margin-bottom: 6px;">⚙️ Test Code (Development Mode)</div>
+            <div id="devTestCode" style="font-size: 20px; font-weight: bold; color: var(--cyan); letter-spacing: 2px; font-family: monospace;">000000</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 6px;">👆 Copy code above and paste below</div>
+          </div>
+          
           <div id="smsOtpError" style="color: var(--danger); font-size: 12px; margin-bottom: 12px; display: none;"></div>
           <div class="form">
-            <input class="input" type="text" id="smsOtpCode" placeholder="000000" maxlength="6" style="text-align: center; font-size: 24px; letter-spacing: 4px; font-weight: bold;" />
-            <div style="font-size: 12px; color: var(--muted); text-align: center; margin-top: 12px;">
-              Didn't get the code? <span id="resendOtpBtn" style="color: var(--cyan); cursor: pointer; text-decoration: underline;">Resend</span>
+            <div style="font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 8px;">Enter your 6-digit code:</div>
+            <input class="input" type="text" id="smsOtpCode" placeholder="000000" maxlength="6" autocomplete="off" style="text-align: center; font-size: 24px; letter-spacing: 4px; font-weight: bold;" />
+            <div style="font-size: 11px; color: var(--muted); text-align: center; margin-top: 12px;">
+              Didn't get the code? <span id="resendOtpBtn" style="color: var(--cyan); cursor: pointer; text-decoration: underline;">Resend SMS</span>
             </div>
           </div>
           <button class="button" id="verifyOtpBtn">Verify & Complete Signup</button>

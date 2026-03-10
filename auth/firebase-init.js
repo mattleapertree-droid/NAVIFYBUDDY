@@ -204,3 +204,54 @@ window.findUserByPhone = async (phoneNumber) => {
     return null;
   }
 };
+
+// Calculate bearing (direction) from one point to another
+// Returns bearing in degrees (0-360) where 0/360 = North, 90 = East, 180 = South, 270 = West
+window.calculateBearing = (from, to) => {
+  const toRad = (deg) => deg * (Math.PI / 180);
+  const toDeg = (rad) => rad * (180 / Math.PI);
+  
+  const lat1 = toRad(from.lat);
+  const lat2 = toRad(to.lat);
+  const dLng = toRad(to.lng - from.lng);
+  
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  
+  let bearing = toDeg(Math.atan2(y, x));
+  bearing = (bearing + 360) % 360; // Normalize to 0-360
+  return bearing;
+};
+
+// Convert bearing to compass direction with arrow emoji
+window.getBearingArrow = (bearing) => {
+  // Returns emoji arrow pointing in direction
+  const directions = ['⬇️', '↙️', '⬅️', '↖️', '⬆️', '↗️', '➡️', '↘️'];
+  const index = Math.round(bearing / 45) % 8;
+  return directions[index];
+};
+
+// Convert bearing to compass direction name
+window.getBearingDirection = (bearing) => {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const index = Math.round(bearing / 45) % 8;
+  return dirs[index];
+};
+
+// Enhanced Haversine distance calculation
+window.haversineKm = (from, to) => {
+  const R = 6371; // Earth radius in km
+  const toRad = (deg) => deg * (Math.PI / 180);
+  
+  const lat1 = toRad(from.lat);
+  const lat2 = toRad(to.lat);
+  const dLat = toRad(to.lat - from.lat);
+  const dLng = toRad(to.lng - from.lng);
+  
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1) * Math.cos(lat2) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};

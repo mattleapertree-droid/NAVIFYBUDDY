@@ -958,7 +958,14 @@ function renderContacts() {
             <span style="font-size: 11px; background: rgba(123, 241, 255, 0.2); color: #7bf1ff; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(123, 241, 255, 0.4);">👤 Friend</span>
           </div>
           <div class="contact-meta">${contact.phone || 'No phone'} ${contact.email ? `• ${contact.email}` : ''}</div>
-          <div class="contact-distance">${distanceText}</div>
+          <div class="contact-distance" style="display: flex; align-items: center; gap: 8px;">
+            <span>${distanceText}</span>
+            ${contactLive && lastUserCoords ? `<span style="color: #7bf1ff; font-size: 14px;" title="Direction">${(() => {
+              const bearing = window.calculateBearing(lastUserCoords, { lat: contactLive.lat, lng: contactLive.lng });
+              const dir = window.getBearingDirection(bearing);
+              return `${window.getBearingArrow(bearing)} ${dir}`;
+            })()}</span>` : ''}
+          </div>
         </div>
       </div>
     `;
@@ -982,14 +989,26 @@ function openContactModal(contactId) {
   const contactLive = live[contact.id];
 
   contactModalTitle.textContent = contact.name;
-  contactModalSubtitle.textContent = 'Choose how you want to contact or locate this person.';
+  
+  // Calculate bearing and direction to friend
+  let directionInfo = '';
+  if (contactLive && lastUserCoords) {
+    const bearing = window.calculateBearing(lastUserCoords, { lat: contactLive.lat, lng: contactLive.lng });
+    const direction = window.getBearingDirection(bearing);
+    const arrow = window.getBearingArrow(bearing);
+    directionInfo = `<div style="background: rgba(123, 241, 255, 0.1); padding: 8px; border-radius: 6px; margin: 8px 0; text-align: center;"><strong>📍 Direction: ${arrow} ${direction}</strong><br><small>${bearing.toFixed(0)}° from you</small></div>`;
+  }
+
+  contactModalSubtitle.textContent = contactLive ? '📍 Live Location - Choose how to contact' : 'Choose how you want to contact this person';
 
   contactDetailBox.innerHTML = `
     <div><strong>Phone:</strong> ${contact.phone || 'Not set'}</div>
     <div><strong>Email:</strong> ${contact.email || 'Not set'}</div>
+    ${directionInfo}
     <div><strong>Location:</strong> ${
-      contactLive?.mapUrl ? `<a href="${contactLive.mapUrl}" target="_blank" style="color:#7bf1ff;">Open shared location</a>` : 'No shared location available'
+      contactLive?.lat && contactLive?.lng ? `${contactLive.lat.toFixed(4)}, ${contactLive.lng.toFixed(4)}` : 'No shared location available'
     }</div>
+    ${contactLive?.address ? `<div style="color: var(--muted); font-size: 12px;">📌 ${contactLive.address}</div>` : ''}
   `;
 
   openModal(contactModal);
@@ -1108,7 +1127,9 @@ function syncDemoContactLocations() {
   setLiveData(live);
 }
 
-// Real-time friend location tracking
+// Real-time friend location tracking with auto-detection
+let autoDetectInterval = null;
+
 function initFriendTracking() {
   if (!window.currentUser || !window.navifyDb) return;
   
@@ -1123,11 +1144,50 @@ function initFriendTracking() {
     if (contact.id && !friendListeners[contact.id]) {
       friendListeners[contact.id] = window.listenToFriendLocation(contact.id, (location) => {
         if (location && map) {
-          updateFriendMarkerOnMap(contact.id, contact.name, location.lat, location.lng, location.address, true);
+          // Calculate bearing to friend
+          const bearing = window.calculateBearing(lastUserCoords, { lat: location.lat, lng: location.lng });
+          updateFriendMarkerOnMap(contact.id, contact.name, location.lat, location.lng, location.address, true, bearing);
         }
       });
     }
   });
+  
+  // Auto-detect nearby users every 10 seconds for continuous discovery
+  if (!autoDetectInterval) {
+    autoDetectInterval = setInterval(() => {
+      if (lastUserCoords && sharingOn) {
+        showNearbyActiveUsersOnMap(lastUserCoords.lat, lastUserCoords.lng);
+      }
+    }, 10000); // Auto-detect every 10 seconds
+    console.log('✓ Auto-detection started (10s interval)');
+  }
+}
+
+// Stop friend tracking and auto-detection
+function stopFriendTracking() {
+  Object.keys(friendListeners).forEach(contactId => {
+    if (friendListeners[contactId]) {
+      friendListeners[contactId]();
+      delete friendListeners[contactId];
+    }
+  });
+  
+  // Clear auto-detection interval
+  if (autoDetectInterval) {
+    clearInterval(autoDetectInterval);
+    autoDetectInterval = null;
+    console.log('✓ Auto-detection stopped');
+  }
+  
+  // Remove all friend markers from map
+  Object.keys(friendMarkers).forEach(markerId => {
+    if (friendMarkers[markerId]) {
+      map.removeLayer(friendMarkers[markerId]);
+      delete friendMarkers[markerId];
+    }
+  });
+  
+  console.log('✓ Friend tracking stopped');
 }
 
 // Show all nearby active users on the map (not just contacts)
@@ -1216,32 +1276,24 @@ function addNearbyUserAsContact(userId, userName, userPhone) {
   initFriendTracking(); // Refresh tracking
 }
 
-function stopFriendTracking() {
-  Object.keys(friendListeners).forEach(contactId => {
-    if (friendListeners[contactId]) {
-      friendListeners[contactId]();
-      delete friendListeners[contactId];
-    }
-  });
-  
-  // Remove all friend markers from map
-  Object.keys(friendMarkers).forEach(contactId => {
-    if (friendMarkers[contactId]) {
-      map.removeLayer(friendMarkers[contactId]);
-      delete friendMarkers[contactId];
-    }
-  });
-}
-
-function updateFriendMarkerOnMap(contactId, contactName, lat, lng, address, isFriend = false) {
+function updateFriendMarkerOnMap(contactId, contactName, lat, lng, address, isFriend = false, bearing = null) {
   if (!map || !lat || !lng) return;
+  
+  // Calculate bearing if not provided and we have user location
+  if (bearing === null && lastUserCoords) {
+    bearing = window.calculateBearing(lastUserCoords, { lat, lng });
+  }
+  
+  const bearingArrow = bearing !== null ? window.getBearingArrow(bearing) : '📍';
+  const bearingDir = bearing !== null ? window.getBearingDirection(bearing) : '';
   
   if (friendMarkers[contactId]) {
     friendMarkers[contactId].setLatLng([lat, lng]);
     friendMarkers[contactId].setPopupContent(`
       <div style="text-align: center; font-size: 12px; color: #fff;">
         <strong>${contactName}</strong><br>
-        ${address || 'Current location'}<br>
+        <small>${bearingArrow} ${bearingDir}</small><br>
+        ${address ? `<small>${address}</small><br>` : ''}
         <button style="margin-top: 4px; padding: 4px 12px; background: #7bf1ff; border: none; border-radius: 4px; cursor: pointer;" onclick="centerMapOnCoords(${lat}, ${lng})">View</button>
       </div>
     `);
@@ -1262,7 +1314,8 @@ function updateFriendMarkerOnMap(contactId, contactName, lat, lng, address, isFr
     marker.bindPopup(`
       <div style="text-align: center; font-size: 12px; color: #333;">
         <strong>${contactName}</strong><br>
-        ${address || 'Current location'}<br>
+        <small>${bearingArrow} ${bearingDir}</small><br>
+        ${address ? `<small>${address}</small><br>` : ''}
         <button style="margin-top: 4px; padding: 4px 12px; background: #7bf1ff; border: none; border-radius: 4px; cursor: pointer;" onclick="centerMapOnCoords(${lat}, ${lng})">View</button>
       </div>
     `);

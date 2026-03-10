@@ -246,28 +246,96 @@ function debounce(fn, delay = 400) {
   };
 }
 
-function haversineKm(a, b) {
-  const R = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
-  const x =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+// ===== ADVANCED LOCATION TRACKING WITH KALMAN FILTERING =====
 
-  return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+// Kalman filter state for each coordinate dimension
+class KalmanFilter {
+  constructor(processVariance, measurementVariance, initialValue = 0, initialEstimateError = 1) {
+    this.processVariance = processVariance;
+    this.measurementVariance = measurementVariance;
+    this.estimateError = initialEstimateError;
+    this.estimate = initialValue;
+  }
+
+  update(measurement) {
+    this.estimateError = this.estimateError + this.processVariance;
+    const kalmanGain = this.estimateError / (this.estimateError + this.measurementVariance);
+    this.estimate = this.estimate + kalmanGain * (measurement - this.estimate);
+    this.estimateError = (1 - kalmanGain) * this.estimateError;
+    return this.estimate;
+  }
+}
+
+// Initialize Kalman filters for latitude and longitude
+let kalmanFilters = {
+  lat: null,
+  lng: null
+};
+
+// Velocity tracking for prediction
+let lastGPSUpdate = { lat: 0, lng: 0, time: 0 };
+let velocityEstimate = { lat: 0, lng: 0 };
+
+// Enhanced Haversine with high precision
+function haversineKm(a, b) {
+  const EARTH_RADIUS_KM = 6371.0;
+  const lat1Rad = (a.lat * Math.PI) / 180;
+  const lat2Rad = (b.lat * Math.PI) / 180;
+  const deltaLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const deltaLng = ((b.lng - a.lng) * Math.PI) / 180;
+
+  const sinHalfDLat = Math.sin(deltaLat / 2);
+  const sinHalfDLng = Math.sin(deltaLng / 2);
+  const a_val = sinHalfDLat * sinHalfDLat +
+                Math.cos(lat1Rad) * Math.cos(lat2Rad) * sinHalfDLng * sinHalfDLng;
+  const c = 2 * Math.atan2(Math.sqrt(a_val), Math.sqrt(1 - a_val));
+
+  return EARTH_RADIUS_KM * c;
 }
 
 function metersBetween(a, b) {
-  return haversineKm(a, b) * 1000;
+  const km = haversineKm(a, b);
+  return km * 1000;
 }
 
-function smoothCoords(prev, next, factor = 0.35) {
-  if (!prev) return next;
+// Advanced coordinate smoothing using Kalman filter
+function smoothCoords(prev, next, accuracy = 10) {
+  if (!prev) {
+    if (!kalmanFilters.lat) {
+      kalmanFilters.lat = new KalmanFilter(0.0001, accuracy * accuracy, next.lat);
+      kalmanFilters.lng = new KalmanFilter(0.0001, accuracy * accuracy, next.lng);
+    }
+    return next;
+  }
+
+  const now = Date.now();
+  const timeDelta = (now - (lastGPSUpdate.time || now)) / 1000;
+  if (timeDelta > 0) {
+    velocityEstimate.lat = (next.lat - prev.lat) / timeDelta;
+    velocityEstimate.lng = (next.lng - prev.lng) / timeDelta;
+  }
+
+  const measurementVar = Math.max(accuracy * accuracy, 1);
+  kalmanFilters.lat.measurementVariance = measurementVar;
+  kalmanFilters.lng.measurementVariance = measurementVar;
+
+  const smoothedLat = kalmanFilters.lat.update(next.lat);
+  const smoothedLng = kalmanFilters.lng.update(next.lng);
+
+  lastGPSUpdate = { lat: next.lat, lng: next.lng, time: now };
+
   return {
-    lat: prev.lat + (next.lat - prev.lat) * factor,
-    lng: prev.lng + (next.lng - prev.lng) * factor
+    lat: smoothedLat,
+    lng: smoothedLng
+  };
+}
+
+// Predict next position based on velocity
+function predictNextCoord(current, timeDelta = 5) {
+  if (timeDelta <= 0) return current;
+  return {
+    lat: current.lat + (velocityEstimate.lat * timeDelta),
+    lng: current.lng + (velocityEstimate.lng * timeDelta)
   };
 }
 
@@ -759,8 +827,11 @@ async function requestLocation() {
         lng: pos.coords.longitude
       };
 
-      const accuracy = Math.round(pos.coords.accuracy || 0);
-      const smoothed = smoothCoords(lastUserCoords, raw, 0.4);
+      // Use actual GPS accuracy for better filtering and smoothing
+      const accuracy = Math.round(pos.coords.accuracy || 20);
+      
+      // ADVANCED: Kalman filtered smoothing based on actual GPS accuracy
+      const smoothed = smoothCoords(lastUserCoords, raw, accuracy);
       const movedMeters = metersBetween(lastUserCoords || smoothed, smoothed);
       lastUserCoords = smoothed;
 
@@ -805,8 +876,8 @@ async function requestLocation() {
     },
     {
       enableHighAccuracy: true,
-      timeout: 15000,
-      maximumAge: 2000
+      timeout: 10000,
+      maximumAge: 1000  // More frequent updates for better accuracy
     }
   );
 }

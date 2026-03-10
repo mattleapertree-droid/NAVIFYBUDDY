@@ -98,18 +98,32 @@ window.shareLocationToFirebase = (uid, lat, lng, address, accuracy = null) => {
     return;
   }
   
+  // Calculate location quality score (0-100)
+  // Better accuracy = higher quality
+  let qualityScore = 100;
+  if (accuracy) {
+    // Accuracy typically 5-30m for good GPS
+    // If accuracy > 50m, reduce quality
+    if (accuracy > 50) {
+      qualityScore = Math.max(20, 100 - (accuracy - 50) * 2);
+    } else if (accuracy > 30) {
+      qualityScore = 100 - (accuracy - 30) * 0.5;
+    }
+  }
+  
   const locationData = {
     lat: lat,
     lng: lng,
     address: address || 'Current location',
     timestamp: firebase.database.ServerValue.TIMESTAMP,
-    isSharing: true
+    isSharing: true,
+    // Accuracy in meters (used by getNearbyUsers for filtering)
+    accuracy: Math.round(accuracy || 20),
+    // Quality score helps other devices decide whether to use this location
+    qualityScore: Math.max(0, Math.min(100, Math.round(qualityScore)))
   };
   
-  // IMPROVEMENT: Store GPS accuracy if available for filtering stale/inaccurate data
-  if (accuracy && accuracy > 0) {
-    locationData.accuracy = accuracy;
-  }
+  console.log(`📍 Sharing location with quality=${locationData.qualityScore}, accuracy=${locationData.accuracy}m`);
   
   return window.navifyDb.ref(`users/${uid}/location`).set(locationData);
 };
@@ -123,19 +137,34 @@ window.stopSharingLocation = (uid) => {
 // Listen to friend's location in real-time WITH ACCURACY VALIDATION
 window.listenToFriendLocation = (friendUid, callback) => {
   if (!window.navifyDb || !friendUid) return () => {};
+  
+  let previousLocation = null; // Track previous location for outlier detection
   const ref = window.navifyDb.ref(`users/${friendUid}/location`);
+  
   ref.on('value', (snapshot) => {
     const location = snapshot.val();
     
-    // VALIDATION: Check if location data is valid and accurate before processing
+    // VALIDATION: Comprehensive location data check
     if (location && window.isValidLocationData(location)) {
+      // OUTLIER DETECTION: Check for impossible jumps (teleportation)
+      if (previousLocation && window.detectLocationOutlier(location, previousLocation)) {
+        console.warn(`❌ OUTLIER DETECTED for friend ${friendUid}: Impossible jump detected (>252 km/h)`);
+        console.warn(`   Previous:`, previousLocation);
+        console.warn(`   Current:`, location);
+        // Reject this location update, keep using previous
+        return;
+      }
+      
+      // VALID: Location passed all checks
+      previousLocation = location;
       if (callback) callback(location);
+      console.log(`✓ Friend ${friendUid} location updated:`, { lat: location.lat, lng: location.lng, accuracy: location.accuracy });
     } else if (location) {
       console.warn(`⚠️ Friend location ${friendUid} failed validation - stale/inaccurate:`, location);
-      // Still call callback but with validation result so UI can show warning
-      // This prevents showing completely incorrect locations
+      // Do not update UI with invalid location - prevents showing wrong distances
     }
   });
+  
   return () => ref.off();
 };
 
@@ -143,10 +172,40 @@ window.listenToFriendLocation = (friendUid, callback) => {
 // Cache for nearby users to avoid redundant Firebase queries
 window.nearbyUsersCache = { users: [], timestamp: 0, cacheDurationMs: 2000 };
 
+// Advanced outlier detection for suspicious locations
+window.detectLocationOutlier = (current, previous, maxSpeedMps = 70) => {
+  // max 252 km/h (maxSpeedMps * 3.6)
+  if (!previous) return false; // No previous data, not an outlier
+  
+  const EARTH_RADIUS_M = 6371000;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  
+  const lat1 = toRad(previous.lat);
+  const lat2 = toRad(current.lat);
+  const deltaLat = toRad(current.lat - previous.lat);
+  const deltaLng = toRad(current.lng - previous.lng);
+  
+  const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+            Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distanceMeters = EARTH_RADIUS_M * c;
+  
+  // Assume ~5 second interval between updates
+  const speedMps = distanceMeters / 5;
+  
+  // Mark as outlier if moving unreasonably fast (>252 km/h)
+  if (speedMps > maxSpeedMps) {
+    console.warn(`⚠️ Location jump detected: ${speedMps.toFixed(1)} m/s (~${(speedMps * 3.6).toFixed(0)} km/h)`);
+    return true;
+  }
+  
+  return false;
+};
+
 window.getNearbyUsers = async (myLat, myLng, radiusKm = 5) => {
   if (!window.navifyDb) return [];
   
-  // CACHE CHECK: Return cached results if fresh (within 2 seconds)
+  // CACHE CHECK: Return cached results if fresh
   const cacheAge = Date.now() - window.nearbyUsersCache.timestamp;
   if (cacheAge < window.nearbyUsersCache.cacheDurationMs && window.nearbyUsersCache.users.length > 0) {
     console.log(`📦 Using cached nearby users (${cacheAge}ms old)`);
@@ -161,22 +220,21 @@ window.getNearbyUsers = async (myLat, myLng, radiusKm = 5) => {
     const userData = child.val();
     const userLoc = userData?.location;
     
-    // VALIDATION: Check that user is sharing and not self
+    // Check that user is sharing and not self
     if (!userLoc || !userLoc.isSharing || child.key === currentUserId) {
-      return; // Skip this user
+      return;
     }
     
-    // VALIDATION: Comprehensive location data check - CRITICAL FIX FOR ACCURACY
+    // Comprehensive validation
     if (!window.isValidLocationData(userLoc)) {
-      console.warn(`⏭️ Skipping user ${child.key}: location data invalid/stale`);
-      return; // Skip if location is stale, inaccurate, or otherwise invalid
+      console.warn(`⏭️ Skipping user ${child.key}: invalid/stale location`);
+      return;
     }
     
-    // DISTANCE: Calculate distance using validated coordinates
+    // Calculate distance with high precision
     try {
       const distance = window.haversineKm({ lat: myLat, lng: myLng }, { lat: userLoc.lat, lng: userLoc.lng });
       
-      // Only include users within radius and not at same location (distance > 0)
       if (distance <= radiusKm && distance > 0) {
         users.push({
           uid: child.key,
@@ -201,7 +259,7 @@ window.getNearbyUsers = async (myLat, myLng, radiusKm = 5) => {
   // Sort by distance (nearest first)
   const sorted = users.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
   
-  // UPDATE CACHE
+  // Update cache
   window.nearbyUsersCache = {
     users: sorted,
     timestamp: Date.now(),
@@ -316,28 +374,33 @@ window.haversineKm = (from, to) => {
   return R * c;
 };
 
-// ========== LOCATION ACCURACY IMPROVEMENTS ==========
+// ========== ADVANCED LOCATION ACCURACY IMPROVEMENTS ==========
 
-// Validate GPS coordinates for accuracy and validity
+// High-precision coordinate validation
 window.isValidCoordinate = (lat, lng) => {
   // Check if lat/lng are numbers and within valid ranges
   if (typeof lat !== 'number' || typeof lng !== 'number') return false;
-  if (lat < -90 || lat > 90) return false; // Latitude: -90 to 90
-  if (lng < -180 || lng > 180) return false; // Longitude: -180 to 180
-  if (isNaN(lat) || isNaN(lng)) return false; // Check for NaN
+  if (lat < -90 || lat > 90) return false;
+  if (lng < -180 || lng > 180) return false;
+  if (isNaN(lat) || isNaN(lng)) return false;
+  if (!isFinite(lat) || !isFinite(lng)) return false; // Check for Infinity
   return true;
 };
 
-// Check if location data is fresh (not stale)
-window.isLocationFresh = (timestamp, maxAgeMs = 45000) => {
+// Check if location data is fresh (not stale) - stricter for accuracy
+window.isLocationFresh = (timestamp, maxAgeMs = 30000) => {
   if (!timestamp) return false;
   const age = Date.now() - timestamp;
+  // More aggressive stale data filtering for accuracy (30s instead of 45s)
   return age < maxAgeMs;
 };
 
-// Filter location by GPS accuracy (ignore weak accuracy readings)
-window.isAccurateLocation = (accuracy, maxAccuracyM = 100) => {
+// Filter location by GPS accuracy (ignore weak accuracy readings) - stricter for accuracy
+window.isAccurateLocation = (accuracy, maxAccuracyM = 50) => {
+  // Only accept GPS readings with accuracy better than 50m (instead of 100m)
   if (!accuracy || accuracy > maxAccuracyM) return false;
+  // Reject extremely good readings that might be outliers
+  if (accuracy < 1) return false;
   return true;
 };
 

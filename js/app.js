@@ -763,35 +763,45 @@ async function searchUserByPhone() {
 
   try {
     searchErrorBox.style.display = 'none';
-    setStatus('Searching for user...');
+    setStatus('🔍 Searching for user...');
+    console.log('Searching for phone:', phoneValue);
+
+    // Verify Firebase is ready
+    if (!window.findUserByPhone) {
+      throw new Error('Phone lookup function not initialized. Please refresh the page.');
+    }
 
     // Call the Firebase phone lookup function
     const foundUser = await window.findUserByPhone(phoneValue);
+    console.log('Search result:', foundUser);
 
     if (!foundUser) {
-      searchErrorBox.textContent = 'No user found with that phone number';
+      searchErrorBox.textContent = 'No user found with that phone number. Make sure they signed up with that number.';
       searchErrorBox.style.display = 'block';
       searchResultBox.style.display = 'none';
       foundUserData = null;
+      setStatus('❌ User not found');
       return;
     }
 
     // Store the found user data for adding
     foundUserData = foundUser;
+    console.log('Found user:', foundUser.name, '| Phone:', foundUser.phone);
 
     // Display the found user
-    document.getElementById('searchResultName').textContent = foundUser.name || 'Unknown User';
-    document.getElementById('searchResultPhone').textContent = foundUser.phone || 'No phone';
+    document.getElementById('searchResultName').textContent = foundUser.name || 'User #' + foundUser.uid.slice(-6);
+    document.getElementById('searchResultPhone').textContent = '📱 ' + (foundUser.phone || 'No phone');
 
     searchErrorBox.style.display = 'none';
     searchResultBox.style.display = 'block';
-    setStatus(`Found ${foundUser.name || 'user'}!`);
+    setStatus(`✓ Found: ${foundUser.name || 'User'}!`);
   } catch (err) {
     console.error('Error searching user:', err);
-    searchErrorBox.textContent = 'Error searching user. Please try again.';
+    searchErrorBox.textContent = 'Error: ' + (err.message || 'Could not search for user');
     searchErrorBox.style.display = 'block';
     searchResultBox.style.display = 'none';
     foundUserData = null;
+    setStatus('❌ Search failed');
   }
 }
 
@@ -814,7 +824,7 @@ function addFoundUserAsContact() {
 
   const contacts = getContacts();
   // Check if already added
-  if (contacts.find(c => c.phone === contact.phone && c.phone)) {
+  if (contacts.find(c => c.id === contact.id || (c.phone === contact.phone && c.phone))) {
     alert(`${contact.name} is already in your contacts`);
     return;
   }
@@ -827,39 +837,25 @@ function addFoundUserAsContact() {
     window.navifyDb.ref(`users/${window.currentUser.uid}/contacts/${contact.id}`).set(contact);
   }
 
-  // Reset search
+  // Reset search UI
   document.getElementById('searchPhoneInput').value = '';
   document.getElementById('searchResultBox').style.display = 'none';
   document.getElementById('addContactError').style.display = 'none';
   foundUserData = null;
 
-  renderContacts();
-  closeModal(shareModal);
-  setStatus(`${contact.name} added to your Trusted Circle!`);
-}
-
-// Setup phone search event listeners
-document.addEventListener('DOMContentLoaded', () => {
-  const searchPhoneBtn = document.getElementById('searchPhoneBtn');
-  const addFoundUserBtn = document.getElementById('addFoundUserBtn');
-  const searchPhoneInput = document.getElementById('searchPhoneInput');
-
-  if (searchPhoneBtn) {
-    searchPhoneBtn.addEventListener('click', searchUserByPhone);
-  }
-
-  if (addFoundUserBtn) {
-    addFoundUserBtn.addEventListener('click', addFoundUserAsContact);
-  }
-
-  if (searchPhoneInput) {
-    searchPhoneInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        searchUserByPhone();
+  // Setup real-time tracking for newly added contact
+  if (contact.id && !friendListeners[contact.id]) {
+    friendListeners[contact.id] = window.listenToFriendLocation(contact.id, (location) => {
+      if (location && map) {
+        updateFriendMarkerOnMap(contact.id, contact.name, location.lat, location.lng, location.address, true);
       }
     });
   }
-}, { once: false });
+
+  renderContacts();
+  closeModal(shareModal);
+  setStatus(`✓ ${contact.name} added to Trusted Circle and being tracked!`);
+}
 
 function saveContact() {
   const name = contactNameInput.value.trim();
@@ -1132,10 +1128,17 @@ async function showNearbyActiveUsersOnMap(userLat, userLng) {
     const nearbyActive = await window.getNearbyUsers(userLat, userLng, 5);
     const contacts = getContacts();
     
+    console.log('Nearby active users:', nearbyActive.length);
+    
     nearbyActive.forEach(user => {
       // Check if this is a contact (friend)
       const isContact = contacts.find(c => c.id === user.uid);
       const markerId = `nearby_${user.uid}`;
+      
+      if (!user.location || !user.location.lat || !user.location.lng) {
+        console.warn('Invalid location for user:', user.uid);
+        return;
+      }
       
       if (friendMarkers[markerId]) {
         // Update existing marker
@@ -1154,15 +1157,18 @@ async function showNearbyActiveUsersOnMap(userLat, userLng) {
           })
         }).addTo(map);
         
+        const lastSeenTime = user.lastSeen ? new Date(user.lastSeen).toLocaleTimeString() : 'Recently';
         marker.bindPopup(`
           <div style="text-align: center; font-size: 12px; color: #333;">
-            <strong>${user.name || 'Nearby User'}</strong><br>
-            Last seen: ${user.lastSeen ? new Date(user.lastSeen).toLocaleTimeString() : 'Recently'}<br>
-            <button style="margin-top: 4px; padding: 4px 12px; background: #FFD700; border: none; border-radius: 4px; cursor: pointer;" onclick="addNearbyUserAsContact('${user.uid}', '${user.name || 'User'}', '${user.phone || ''}')">+ Add</button>
+            <strong>${user.name}</strong><br>
+            <small>📍 ${user.distance}km away</small><br>
+            <small>Last seen: ${lastSeenTime}</small><br>
+            <button style="margin-top: 4px; padding: 4px 12px; background: #FFD700; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;" onclick="addNearbyUserAsContact('${user.uid}', '${user.name}', '${user.phone}')">+ Add</button>
           </div>
         `);
         
         friendMarkers[markerId] = marker;
+        console.log('Added nearby user marker:', user.name);
       }
     });
   } catch (err) {
@@ -1658,6 +1664,27 @@ document.addEventListener('DOMContentLoaded', () => {
   renderContacts();
   updateTransportModeUI();
   updateLoginStatus();
+
+  // Setup phone search listeners
+  const searchPhoneBtn = document.getElementById('searchPhoneBtn');
+  const addFoundUserBtn = document.getElementById('addFoundUserBtn');
+  const searchPhoneInput = document.getElementById('searchPhoneInput');
+
+  if (searchPhoneBtn) {
+    searchPhoneBtn.addEventListener('click', searchUserByPhone);
+  }
+
+  if (addFoundUserBtn) {
+    addFoundUserBtn.addEventListener('click', addFoundUserAsContact);
+  }
+
+  if (searchPhoneInput) {
+    searchPhoneInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        searchUserByPhone();
+      }
+    });
+  }
 
   if (sharingOn) {
     shareToggle.textContent = 'Share: On';

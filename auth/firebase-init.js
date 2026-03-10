@@ -125,19 +125,25 @@ window.getNearbyUsers = async (myLat, myLng, radiusKm = 5) => {
   const users = [];
   
   snapshot.forEach((child) => {
-    const userLoc = child.val()?.location;
+    const userData = child.val();
+    const userLoc = userData?.location;
+    
     // Only include users who are actively sharing location (isSharing must be true)
-    if (userLoc && userLoc.lat && userLoc.lng && userLoc.isSharing === true) {
+    if (userLoc && userLoc.lat && userLoc.lng && userLoc.isSharing === true && child.key !== firebase.auth().currentUser?.uid) {
       const distance = haversineKm({ lat: myLat, lng: myLng }, { lat: userLoc.lat, lng: userLoc.lng });
       if (distance <= radiusKm && distance > 0) {
         users.push({
           uid: child.key,
-          name: child.val()?.name || 'Unknown User',
-          phone: child.val()?.phone?.number || 'N/A',
-          lat: userLoc.lat,
-          lng: userLoc.lng,
-          address: userLoc.address,
-          distance: distance.toFixed(2)
+          name: userData?.name || userData?.displayName || 'User',
+          phone: userData?.phone?.number || userData?.phone || 'N/A',
+          location: {
+            lat: userLoc.lat,
+            lng: userLoc.lng
+          },
+          address: userLoc.address || userLoc.label || 'Nearby',
+          distance: distance.toFixed(2),
+          lastSeen: userData?.lastSeen || Date.now(),
+          verified: userData?.verified || false
         });
       }
     }
@@ -158,27 +164,39 @@ window.findUserByPhone = async (phoneNumber) => {
   if (!window.navifyDb || !phoneNumber) return null;
   
   try {
+    console.log('🔍 Searching Firebase for phone:', phoneNumber);
+    
     // Format the phone number for consistency
     const formattedPhone = window.formatPhoneNumber(phoneNumber);
+    console.log('Formatted phone:', formattedPhone);
     
     // Search through all users for matching phone
     const snapshot = await window.navifyDb.ref('users').once('value');
     
     let foundUser = null;
     snapshot.forEach((child) => {
-      const userPhone = child.val()?.phone?.number;
+      const userData = child.val();
+      const userPhone = userData?.phone?.number || userData?.phone;
+      
+      console.log('Checking user', child.key, '- has phone:', userPhone);
+      
       if (userPhone === formattedPhone || userPhone === phoneNumber) {
         foundUser = {
           uid: child.key,
-          name: child.val()?.name || 'User',
-          email: child.val()?.email || null,
+          name: userData?.name || userData?.displayName || 'User',
+          email: userData?.email || null,
           phone: userPhone,
-          location: child.val()?.location || null,
-          lastSeen: child.val()?.lastSeen || null,
-          verified: child.val()?.verified || false
+          location: userData?.location || null,
+          lastSeen: userData?.lastSeen || null,
+          verified: userData?.verified || false
         };
+        console.log('✓ Found matching user:', foundUser.name);
       }
     });
+    
+    if (!foundUser) {
+      console.log('❌ No matching user found for phone:', phoneNumber);
+    }
     
     return foundUser;
   } catch (err) {

@@ -9,8 +9,8 @@ function bindSignIn() {
   const socials = signInModal?.querySelectorAll('.social-btn');
   const authScreen = document.getElementById('authScreen');
 
-  // Load saved email if "Remember Me" was previously checked
-  document.addEventListener('DOMContentLoaded', () => {
+  // Load saved email if "Remember Me" was previously checked - run immediately and on DOMContentLoaded
+  function loadSavedEmail() {
     const savedEmail = localStorage.getItem('navify-saved-email');
     if (savedEmail && emailInput) {
       emailInput.value = savedEmail;
@@ -18,7 +18,13 @@ function bindSignIn() {
         rememberMeCheckbox.checked = true;
       }
     }
-  });
+  }
+  
+  // Try loading immediately
+  loadSavedEmail();
+  
+  // Also try on DOMContentLoaded in case elements weren't ready
+  document.addEventListener('DOMContentLoaded', loadSavedEmail);
 
   function showSignInError(message) {
     if (signInError) {

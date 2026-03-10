@@ -307,6 +307,12 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
   <script src="../js/theme.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="../auth/firebase-init.js"></script>
+  <script src="../auth/firebase-auth.js"></script>
+  <script src="../auth/modal-core.js"></script>
   <script>
     // Check authentication on page load
     document.addEventListener('DOMContentLoaded', () => {
@@ -316,6 +322,23 @@
         window.location.href = '../index.html';
       }
     });
+    
+    // Ensure Firebase is initialized before loading app.js
+    let firebaseReady = false;
+    const checkInterval = setInterval(() => {
+      if (window.navifyAuth && window.navifyDb && window.findUserByPhone) {
+        firebaseReady = true;
+        clearInterval(checkInterval);
+        console.log('✓ Firebase and phone lookup ready');
+      }
+    }, 100);
+    
+    setTimeout(() => {
+      if (!firebaseReady) {
+        console.warn('⚠️ Firebase initialization may be slow, but continuing...');
+      }
+      clearInterval(checkInterval);
+    }, 3000);
   </script>
   <script src="../js/app.js"></script>
 </body>

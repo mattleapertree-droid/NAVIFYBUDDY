@@ -142,25 +142,48 @@
   <div class="modal" id="shareModal" aria-hidden="true">
     <div class="modal-card">
       <div class="modal-title">Add Trusted Contact</div>
+      <div id="addContactError" style="color: var(--danger); font-size: 12px; margin-bottom: 12px; display: none;"></div>
+      
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 13px; color: var(--muted); margin-bottom: 8px; font-weight: bold;">Search by Phone Number</div>
+        <div style="display: flex; gap: 8px;">
+          <input class="input" id="searchPhoneInput" placeholder="09XXXXXXXXX or +63..." style="flex: 1;" />
+          <button class="primary-btn" id="searchPhoneBtn" type="button" style="padding: 8px 16px;">🔍 Search</button>
+        </div>
+        <div id="searchResultBox" style="display: none; background: rgba(123, 241, 255, 0.1); border: 1px solid rgba(123, 241, 255, 0.3); border-radius: 8px; padding: 12px; margin-top: 12px;">
+          <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">Found User:</div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div id="searchResultName" style="font-weight: bold; color: var(--cyan);">Loading...</div>
+              <div id="searchResultPhone" style="font-size: 11px; color: var(--muted);">Phone</div>
+            </div>
+            <button class="primary-btn" id="addFoundUserBtn" type="button" style="padding: 6px 12px; font-size: 12px;">+ Add Friend</button>
+          </div>
+        </div>
+      </div>
 
-      <label class="field">
-        <span>Name</span>
-        <input class="input" id="contactNameInput" placeholder="Full name" />
-      </label>
+      <div style="border-top: 1px solid rgba(123, 241, 255, 0.2); padding-top: 16px; margin-top: 16px;">
+        <div style="font-size: 13px; color: var(--muted); margin-bottom: 8px; font-weight: bold;">Or Add Manual Entry</div>
+        
+        <label class="field">
+          <span>Name</span>
+          <input class="input" id="contactNameInput" placeholder="Full name" />
+        </label>
 
-      <label class="field">
-        <span>Phone number</span>
-        <input class="input" id="contactPhoneInput" placeholder="09XXXXXXXXX or +63..." />
-      </label>
+        <label class="field">
+          <span>Phone number</span>
+          <input class="input" id="contactPhoneInput" placeholder="09XXXXXXXXX or +63..." />
+        </label>
 
-      <label class="field">
-        <span>Email</span>
-        <input class="input" id="contactEmailInput" placeholder="example@email.com" />
-      </label>
+        <label class="field">
+          <span>Email (optional)</span>
+          <input class="input" id="contactEmailInput" placeholder="example@email.com" />
+        </label>
 
-      <div class="action-row">
-        <button class="primary-btn" id="addContactBtn" type="button">Save Contact</button>
-        <button class="secondary-btn modal-close" data-close="#shareModal" type="button">Close</button>
+        <div class="action-row">
+          <button class="primary-btn" id="addContactBtn" type="button">Save Contact</button>
+          <button class="secondary-btn modal-close" data-close="#shareModal" type="button">Close</button>
+        </div>
       </div>
     </div>
   </div>
@@ -265,6 +288,14 @@
         </div>
         <div class="panel-sub" style="margin-top: 8px;">Current: <strong id="currentTransportLabel">Walk</strong></div>
       </label>
+
+      <div style="border-top: 1px solid rgba(123, 241, 255, 0.2); padding-top: 12px; margin-top: 16px;">
+        <div style="font-size: 13px; color: var(--muted); margin-bottom: 8px; font-weight: bold;">Information</div>
+        <div class="action-row" style="gap: 8px;">
+          <button class="secondary-btn" onclick="window.location.href='../pages/about.html'" type="button" style="flex: 1;">ℹ️ About</button>
+          <button class="secondary-btn" onclick="window.location.href='../pages/team.html'" type="button" style="flex: 1;">👥 Team</button>
+        </div>
+      </div>
 
       <div class="action-row">
         <button class="primary-btn" id="savePrefsBtn" type="button">Save</button>

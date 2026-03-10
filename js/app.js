@@ -745,6 +745,122 @@ async function requestLocation() {
   );
 }
 
+// Phone-based user search functionality
+let foundUserData = null;
+
+async function searchUserByPhone() {
+  const searchErrorBox = document.getElementById('addContactError');
+  const searchResultBox = document.getElementById('searchResultBox');
+  const phoneInput = document.getElementById('searchPhoneInput');
+  const phoneValue = phoneInput.value.trim();
+
+  if (!phoneValue) {
+    searchErrorBox.textContent = 'Please enter a phone number';
+    searchErrorBox.style.display = 'block';
+    searchResultBox.style.display = 'none';
+    return;
+  }
+
+  try {
+    searchErrorBox.style.display = 'none';
+    setStatus('Searching for user...');
+
+    // Call the Firebase phone lookup function
+    const foundUser = await window.findUserByPhone(phoneValue);
+
+    if (!foundUser) {
+      searchErrorBox.textContent = 'No user found with that phone number';
+      searchErrorBox.style.display = 'block';
+      searchResultBox.style.display = 'none';
+      foundUserData = null;
+      return;
+    }
+
+    // Store the found user data for adding
+    foundUserData = foundUser;
+
+    // Display the found user
+    document.getElementById('searchResultName').textContent = foundUser.name || 'Unknown User';
+    document.getElementById('searchResultPhone').textContent = foundUser.phone || 'No phone';
+
+    searchErrorBox.style.display = 'none';
+    searchResultBox.style.display = 'block';
+    setStatus(`Found ${foundUser.name || 'user'}!`);
+  } catch (err) {
+    console.error('Error searching user:', err);
+    searchErrorBox.textContent = 'Error searching user. Please try again.';
+    searchErrorBox.style.display = 'block';
+    searchResultBox.style.display = 'none';
+    foundUserData = null;
+  }
+}
+
+function addFoundUserAsContact() {
+  if (!foundUserData) {
+    alert('Please search for a user first');
+    return;
+  }
+
+  // Create contact from found user
+  const contact = {
+    id: foundUserData.uid || uid(),
+    name: foundUserData.name || 'Unknown User',
+    phone: foundUserData.phone || '',
+    email: foundUserData.email || '',
+    createdAt: Date.now(),
+    isFriend: true,
+    discoveredFromPhone: true
+  };
+
+  const contacts = getContacts();
+  // Check if already added
+  if (contacts.find(c => c.phone === contact.phone && c.phone)) {
+    alert(`${contact.name} is already in your contacts`);
+    return;
+  }
+
+  contacts.push(contact);
+  setContacts(contacts);
+
+  // Save to Firebase if user is logged in
+  if (window.currentUser && window.navifyDb) {
+    window.navifyDb.ref(`users/${window.currentUser.uid}/contacts/${contact.id}`).set(contact);
+  }
+
+  // Reset search
+  document.getElementById('searchPhoneInput').value = '';
+  document.getElementById('searchResultBox').style.display = 'none';
+  document.getElementById('addContactError').style.display = 'none';
+  foundUserData = null;
+
+  renderContacts();
+  closeModal(shareModal);
+  setStatus(`${contact.name} added to your Trusted Circle!`);
+}
+
+// Setup phone search event listeners
+document.addEventListener('DOMContentLoaded', () => {
+  const searchPhoneBtn = document.getElementById('searchPhoneBtn');
+  const addFoundUserBtn = document.getElementById('addFoundUserBtn');
+  const searchPhoneInput = document.getElementById('searchPhoneInput');
+
+  if (searchPhoneBtn) {
+    searchPhoneBtn.addEventListener('click', searchUserByPhone);
+  }
+
+  if (addFoundUserBtn) {
+    addFoundUserBtn.addEventListener('click', addFoundUserAsContact);
+  }
+
+  if (searchPhoneInput) {
+    searchPhoneInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        searchUserByPhone();
+      }
+    });
+  }
+}, { once: false });
+
 function saveContact() {
   const name = contactNameInput.value.trim();
   const phone = contactPhoneInput.value.trim();
@@ -830,8 +946,11 @@ function renderContacts() {
 
     card.innerHTML = `
       <div class="contact-top">
-        <div>
-          <div class="contact-name">${contact.name}</div>
+        <div style="flex: 1;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <div class="contact-name">${contact.name}</div>
+            <span style="font-size: 11px; background: rgba(123, 241, 255, 0.2); color: #7bf1ff; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(123, 241, 255, 0.4);">👤 Friend</span>
+          </div>
           <div class="contact-meta">${contact.phone || 'No phone'} ${contact.email ? `• ${contact.email}` : ''}</div>
           <div class="contact-distance">${distanceText}</div>
         </div>
@@ -987,16 +1106,98 @@ function syncDemoContactLocations() {
 function initFriendTracking() {
   if (!window.currentUser || !window.navifyDb) return;
   
+  // First, show all nearby active users (not just contacts)
+  if (lastUserCoords) {
+    showNearbyActiveUsersOnMap(lastUserCoords.lat, lastUserCoords.lng);
+  }
+  
+  // Then track specific contacts for real-time updates
   const contacts = getContacts();
   contacts.forEach(contact => {
     if (contact.id && !friendListeners[contact.id]) {
       friendListeners[contact.id] = window.listenToFriendLocation(contact.id, (location) => {
         if (location && map) {
-          updateFriendMarkerOnMap(contact.id, contact.name, location.lat, location.lng, location.address);
+          updateFriendMarkerOnMap(contact.id, contact.name, location.lat, location.lng, location.address, true);
         }
       });
     }
   });
+}
+
+// Show all nearby active users on the map (not just contacts)
+async function showNearbyActiveUsersOnMap(userLat, userLng) {
+  if (!map || !window.getNearbyUsers) return;
+  
+  try {
+    const nearbyActive = await window.getNearbyUsers(userLat, userLng, 5);
+    const contacts = getContacts();
+    
+    nearbyActive.forEach(user => {
+      // Check if this is a contact (friend)
+      const isContact = contacts.find(c => c.id === user.uid);
+      const markerId = `nearby_${user.uid}`;
+      
+      if (friendMarkers[markerId]) {
+        // Update existing marker
+        friendMarkers[markerId].setLatLng([user.location.lat, user.location.lng]);
+      } else if (!isContact) {
+        // Add new nearby user marker (different icon/color than friends)
+        const markerColor = 'yellow'; // Different color for nearby non-contacts
+        const marker = L.marker([user.location.lat, user.location.lng], {
+          icon: L.icon({
+            iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${markerColor}.png`,
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+          })
+        }).addTo(map);
+        
+        marker.bindPopup(`
+          <div style="text-align: center; font-size: 12px; color: #333;">
+            <strong>${user.name || 'Nearby User'}</strong><br>
+            Last seen: ${user.lastSeen ? new Date(user.lastSeen).toLocaleTimeString() : 'Recently'}<br>
+            <button style="margin-top: 4px; padding: 4px 12px; background: #FFD700; border: none; border-radius: 4px; cursor: pointer;" onclick="addNearbyUserAsContact('${user.uid}', '${user.name || 'User'}', '${user.phone || ''}')">+ Add</button>
+          </div>
+        `);
+        
+        friendMarkers[markerId] = marker;
+      }
+    });
+  } catch (err) {
+    console.error('Error showing nearby users on map:', err);
+  }
+}
+
+// Add a nearby user as a contact from map
+function addNearbyUserAsContact(userId, userName, userPhone) {
+  const contact = {
+    id: userId,
+    name: userName || 'User',
+    phone: userPhone || '',
+    email: '',
+    createdAt: Date.now(),
+    isFriend: true,
+    discoveredFromMap: true
+  };
+
+  const contacts = getContacts();
+  if (contacts.find(c => c.id === userId)) {
+    alert(`${userName} is already in your contacts`);
+    return;
+  }
+
+  contacts.push(contact);
+  setContacts(contacts);
+
+  // Save to Firebase if user is logged in
+  if (window.currentUser && window.navifyDb) {
+    window.navifyDb.ref(`users/${window.currentUser.uid}/contacts/${contact.id}`).set(contact);
+  }
+
+  setStatus(`${userName} added to your Trusted Circle!`);
+  initFriendTracking(); // Refresh tracking
 }
 
 function stopFriendTracking() {
@@ -1016,7 +1217,7 @@ function stopFriendTracking() {
   });
 }
 
-function updateFriendMarkerOnMap(contactId, contactName, lat, lng, address) {
+function updateFriendMarkerOnMap(contactId, contactName, lat, lng, address, isFriend = false) {
   if (!map || !lat || !lng) return;
   
   if (friendMarkers[contactId]) {
@@ -1029,9 +1230,11 @@ function updateFriendMarkerOnMap(contactId, contactName, lat, lng, address) {
       </div>
     `);
   } else {
+    // Determine icon color based on whether this is a friend or nearby user
+    const iconColor = isFriend ? 'cyan' : 'yellow';
     const marker = L.marker([lat, lng], {
       icon: L.icon({
-        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-cyan.png',
+        iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${iconColor}.png`,
         shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
         iconSize: [25, 41],
         iconAnchor: [12, 41],

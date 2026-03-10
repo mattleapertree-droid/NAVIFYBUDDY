@@ -152,3 +152,37 @@ window.getFriendProfile = async (friendUid) => {
   const snapshot = await window.navifyDb.ref(`users/${friendUid}`).once('value');
   return snapshot.val();
 };
+
+// Find user by phone number
+window.findUserByPhone = async (phoneNumber) => {
+  if (!window.navifyDb || !phoneNumber) return null;
+  
+  try {
+    // Format the phone number for consistency
+    const formattedPhone = window.formatPhoneNumber(phoneNumber);
+    
+    // Search through all users for matching phone
+    const snapshot = await window.navifyDb.ref('users').once('value');
+    
+    let foundUser = null;
+    snapshot.forEach((child) => {
+      const userPhone = child.val()?.phone?.number;
+      if (userPhone === formattedPhone || userPhone === phoneNumber) {
+        foundUser = {
+          uid: child.key,
+          name: child.val()?.name || 'User',
+          email: child.val()?.email || null,
+          phone: userPhone,
+          location: child.val()?.location || null,
+          lastSeen: child.val()?.lastSeen || null,
+          verified: child.val()?.verified || false
+        };
+      }
+    });
+    
+    return foundUser;
+  } catch (err) {
+    console.error('Error finding user by phone:', err);
+    return null;
+  }
+};
